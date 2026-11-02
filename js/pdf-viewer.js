@@ -1,6 +1,6 @@
 /**
  * PDF Viewer & Text Highlighter Module
- * Powered by PDF.js with interactive text selection, color highlighting, and AI integration
+ * Powered by PDF.js with IndexedDB Database for Class Storage & Annotations
  */
 class PDFViewerModule {
   constructor() {
@@ -9,16 +9,18 @@ class PDFViewerModule {
     this.pageRendering = false;
     this.pageNumPending = null;
     this.scale = 1.35;
-    this.currentDocId = 'default_doc';
+    this.currentDocId = null;
     this.currentDocName = 'Sin archivo cargado';
     this.activeColor = '#fef08a'; // Pastel yellow
     this.activeColorName = 'amarillo';
     this.lastSelectedText = '';
+    this.currentSubject = 'General';
   }
 
-  init() {
+  async init() {
     this.setupPdfJs();
     this.bindEvents();
+    await this.renderLibrary();
     this.renderHighlightsList();
   }
 
@@ -30,17 +32,28 @@ class PDFViewerModule {
   }
 
   bindEvents() {
+    // File inputs (both library upload and quick open)
     const fileInput = document.getElementById('pdf-file-input');
     fileInput?.addEventListener('change', (e) => {
       const file = e.target.files[0];
       if (file && file.type === 'application/pdf') {
-        this.loadPDFFile(file);
+        this.promptAndSavePdf(file);
       } else if (file) {
         window.app.showToast('Por favor selecciona un archivo PDF válido.', 'warning');
       }
+      fileInput.value = '';
     });
 
-    // Drag and drop zone
+    const libraryUploadInput = document.getElementById('library-file-input');
+    libraryUploadInput?.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (file && file.type === 'application/pdf') {
+        this.promptAndSavePdf(file);
+      }
+      libraryUploadInput.value = '';
+    });
+
+    // Drag and drop zone in library
     const dropZone = document.getElementById('pdf-dropzone');
     if (dropZone) {
       ['dragenter', 'dragover'].forEach(name => {
@@ -58,10 +71,20 @@ class PDFViewerModule {
       dropZone.addEventListener('drop', (e) => {
         const file = e.dataTransfer.files[0];
         if (file && file.type === 'application/pdf') {
-          this.loadPDFFile(file);
+          this.promptAndSavePdf(file);
         }
       });
     }
+
+    // Return to Library view button
+    document.getElementById('btn-back-to-library')?.addEventListener('click', () => {
+      this.showLibraryView();
+    });
+
+    // Search filter in library
+    document.getElementById('library-search-input')?.addEventListener('input', (e) => {
+      this.filterLibrary(e.target.value.trim().toLowerCase());
+    });
 
     // Page controls
     document.getElementById('pdf-prev-page')?.addEventListener('click', () => this.onPrevPage());
@@ -94,7 +117,7 @@ class PDFViewerModule {
         btn.classList.add('active');
         this.activeColor = btn.dataset.color;
         this.activeColorName = btn.dataset.name;
-        window.app.showToast(`Destacador color ${this.activeColorName} seleccionado`, 'info', 2000);
+        window.app.showToast(`Destacador color ${this.activeColorName} seleccionado`, 'info', 1800);
       });
     });
 
@@ -131,37 +154,166 @@ class PDFViewerModule {
     });
   }
 
-  loadPDFFile(file) {
-    this.currentDocName = file.name;
-    this.currentDocId = 'pdf_' + file.name.replace(/[^a-zA-Z0-9]/g, '_');
-    const docTitleEl = document.getElementById('pdf-current-title');
-    if (docTitleEl) docTitleEl.textContent = file.name;
+  /**
+   * Prompt user for subject and save PDF to IndexedDB
+   */
+  async promptAndSavePdf(file) {
+    const defaultTitle = file.name.replace(/\.pdf$/i, '');
+    const subject = prompt('¿A qué asignatura o materia corresponde esta clase? (Ej: Cardiología, Fisiología, Historia...)', 'General') || 'General';
+    const title = prompt('Título descriptivo de la clase:', defaultTitle) || defaultTitle;
 
-    const fileReader = new FileReader();
-    fileReader.onload = (e) => {
-      const typedArray = new Uint8Array(e.target.result);
-      this.loadPdfFromData(typedArray);
-    };
-    fileReader.readAsArrayBuffer(file);
+    try {
+      window.app.showToast('Guardando clase en tu base de datos local...', 'info');
+      const record = await window.dbService.savePDF(file, { subject, title });
+      window.app.showToast(`Clase "${record.title}" guardada en la base de datos.`, 'success');
+      await this.renderLibrary();
+      await this.openPdfFromDatabase(record.id);
+    } catch (e) {
+      console.error(e);
+      window.app.showToast('Error al guardar en la base de datos: ' + e.message, 'danger');
+    }
   }
 
-  async loadPdfFromData(data) {
+  /**
+   * Render the library list of stored classes
+   */
+  async renderLibrary() {
+    const grid = document.getElementById('library-classes-grid');
+    const badge = document.getElementById('library-stats-badge');
+    if (!grid) return;
+
     try {
-      window.app.showToast('Cargando documento...', 'info');
-      const loadingTask = window.pdfjsLib.getDocument({ data });
+      const list = await window.dbService.getAllPDFs();
+      const storage = await window.dbService.getStorageEstimate();
+
+      if (badge) {
+        badge.innerHTML = `📚 ${list.length} Clases Guardadas • Espacio usado: <strong>${storage.usage}</strong>`;
+      }
+
+      if (list.length === 0) {
+        grid.innerHTML = `
+          <div class="empty-state" style="grid-column: 1 / -1;">
+            <span class="empty-icon">📂</span>
+            <h3>Tu biblioteca de clases está vacía</h3>
+            <p>Sube tus archivos PDF aquí. Quedarán almacenados permanentemente en tu navegador para abrirlos cuando quieras.</p>
+            <button class="btn btn-primary" onclick="document.getElementById('library-file-input').click()">
+              + Subir mi primera clase en PDF
+            </button>
+          </div>
+        `;
+        return;
+      }
+
+      const allHighlights = window.appStorage.getHighlights();
+
+      grid.innerHTML = list.map(item => {
+        const highlightsCount = allHighlights.filter(h => h.docId === item.id).length;
+        const uploadDateFormatted = new Date(item.uploadDate).toLocaleDateString('es-ES', {
+          day: 'numeric',
+          month: 'short',
+          year: 'numeric'
+        });
+
+        return `
+          <div class="class-card">
+            <div class="class-card-header">
+              <span class="badge badge-indigo">${item.subject}</span>
+              <button class="icon-btn-danger" title="Eliminar clase de la base de datos" onclick="window.pdfViewerModule.deleteClassFromDb('${item.id}', '${item.title}')">
+                🗑️
+              </button>
+            </div>
+            <h3 class="class-card-title" title="${item.title}">${item.title}</h3>
+            
+            <div class="class-card-meta">
+              <span>📄 ${item.formattedSize}</span>
+              <span>📅 ${uploadDateFormatted}</span>
+              ${item.lastPage > 1 ? `<span>🔖 Pág. ${item.lastPage}</span>` : ''}
+              ${highlightsCount > 0 ? `<span>🖍️ ${highlightsCount} destacados</span>` : ''}
+            </div>
+
+            <div class="class-card-footer">
+              <button class="btn btn-primary w-full" onclick="window.pdfViewerModule.openPdfFromDatabase('${item.id}')">
+                📖 Abrir y Estudiar
+              </button>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+    } catch (e) {
+      console.error('Error rendering library', e);
+    }
+  }
+
+  filterLibrary(query) {
+    const cards = document.querySelectorAll('.class-card');
+    cards.forEach(card => {
+      const text = card.textContent.toLowerCase();
+      card.style.display = text.includes(query) ? '' : 'none';
+    });
+  }
+
+  async openPdfFromDatabase(id) {
+    try {
+      window.app.showToast('Cargando clase desde la base de datos...', 'info');
+      const record = await window.dbService.getPDF(id);
+      if (!record || !record.data) {
+        throw new Error('Archivo no encontrado');
+      }
+
+      this.currentDocId = record.id;
+      this.currentDocName = record.title;
+      this.currentSubject = record.subject;
+
+      // Update UI title
+      const titleEl = document.getElementById('pdf-current-title');
+      const subjectTag = document.getElementById('pdf-current-subject-tag');
+      if (titleEl) titleEl.textContent = record.title;
+      if (subjectTag) {
+        subjectTag.textContent = record.subject;
+        subjectTag.className = 'badge badge-indigo';
+      }
+
+      // Hide library view, show PDF workspace view
+      document.getElementById('pdf-library-view').classList.add('hidden');
+      document.getElementById('pdf-workspace').classList.remove('hidden');
+
+      // Load with PDF.js
+      const typedArray = new Uint8Array(record.data);
+      const loadingTask = window.pdfjsLib.getDocument({ data: typedArray });
       this.pdfDoc = await loadingTask.promise;
-      this.pageNum = 1;
+
+      // Save total pages
+      if (!record.totalPageCount || record.totalPageCount !== this.pdfDoc.numPages) {
+        window.dbService.updatePDF(id, { totalPageCount: this.pdfDoc.numPages });
+      }
 
       document.getElementById('pdf-page-count').textContent = this.pdfDoc.numPages;
-      document.getElementById('pdf-dropzone').classList.add('hidden');
-      document.getElementById('pdf-workspace').classList.remove('hidden');
+
+      // Restore last read page if available
+      this.pageNum = record.lastPage && record.lastPage <= this.pdfDoc.numPages ? record.lastPage : 1;
 
       this.renderPage(this.pageNum);
       this.renderHighlightsList();
-      window.app.showToast('Documento PDF cargado exitosamente.', 'success');
+      window.app.showToast(`Clase "${record.title}" lista para estudio.`, 'success');
+
     } catch (e) {
-      console.error('Error loading PDF', e);
-      window.app.showToast('Error al procesar el archivo PDF: ' + e.message, 'danger');
+      console.error(e);
+      window.app.showToast('Error al abrir documento: ' + e.message, 'danger');
+    }
+  }
+
+  showLibraryView() {
+    document.getElementById('pdf-workspace').classList.add('hidden');
+    document.getElementById('pdf-library-view').classList.remove('hidden');
+    this.renderLibrary();
+  }
+
+  async deleteClassFromDb(id, title) {
+    if (confirm(`¿Deseas eliminar definitivamente "${title}" de tu base de datos?`)) {
+      await window.dbService.deletePDF(id);
+      window.app.showToast('Clase eliminada de la base de datos.', 'info');
+      await this.renderLibrary();
     }
   }
 
@@ -193,14 +345,12 @@ class PDFViewerModule {
       const renderTask = page.render(renderContext);
       await renderTask.promise;
 
-      // Render Text Layer for text selection & highlighting
+      // Render Text Layer
       const textContent = await page.getTextContent();
       const textLayerDiv = document.getElementById('pdf-text-layer');
       textLayerDiv.innerHTML = '';
       textLayerDiv.style.width = `${viewport.width}px`;
       textLayerDiv.style.height = `${viewport.height}px`;
-
-      // Set CSS variable for scale
       textLayerDiv.style.setProperty('--scale-factor', this.scale);
 
       if (window.pdfjsLib.renderTextLayer) {
@@ -218,11 +368,16 @@ class PDFViewerModule {
         this.pageNumPending = null;
       }
 
-      // Update indicators
+      // Update input
       const pageNumInput = document.getElementById('pdf-page-num');
       if (pageNumInput) pageNumInput.value = num;
 
-      // Re-apply existing highlights for this page
+      // Save progress to database
+      if (this.currentDocId) {
+        window.dbService.updatePDF(this.currentDocId, { lastPage: num, lastOpened: new Date().toISOString() });
+      }
+
+      // Re-apply highlights
       this.renderPageHighlightsOverlay(num, viewport);
 
     } catch (e) {
@@ -287,7 +442,7 @@ class PDFViewerModule {
 
     const highlight = {
       id: 'hl_' + Date.now(),
-      docId: this.currentDocId,
+      docId: this.currentDocId || 'general_doc',
       docName: this.currentDocName,
       page: this.pageNum,
       text: text,
@@ -305,21 +460,12 @@ class PDFViewerModule {
   }
 
   renderPageHighlightsOverlay(pageNum, viewport) {
-    const overlay = document.getElementById('pdf-highlights-layer');
-    if (!overlay) return;
-    overlay.innerHTML = '';
-    overlay.style.width = `${viewport.width}px`;
-    overlay.style.height = `${viewport.height}px`;
-
-    // Note: PDF.js text layer matches rendered text spans.
-    // We add visual markers or styled highlight spans to the textLayerDiv
     const textLayer = document.getElementById('pdf-text-layer');
     if (!textLayer) return;
 
     const highlights = window.appStorage.getHighlights(this.currentDocId).filter(h => h.page === pageNum);
     if (highlights.length === 0) return;
 
-    // Search and color text spans that match highlighted keywords
     highlights.forEach(h => {
       const snippet = h.text.slice(0, 30).toLowerCase();
       const spans = textLayer.querySelectorAll('span');
@@ -345,7 +491,7 @@ class PDFViewerModule {
       container.innerHTML = `
         <div class="empty-state-mini">
           <span class="empty-icon">🖍️</span>
-          <p>Selecciona cualquier texto en el PDF para destacarlo o enviarlo al Tutor IA.</p>
+          <p>Selecciona texto en el PDF para destacarlo o enviarlo al Tutor IA.</p>
         </div>
       `;
       return;
@@ -416,7 +562,7 @@ class PDFViewerModule {
 
   async extractCurrentPageTextAndSendToTutor() {
     if (!this.pdfDoc) {
-      window.app.showToast('Primero carga un archivo PDF.', 'warning');
+      window.app.showToast('Primero abre un documento.', 'warning');
       return;
     }
 
@@ -432,11 +578,12 @@ class PDFViewerModule {
       }
 
       window.app.switchTab('tutor');
-      window.tutorModule.setContextDocument(`[Página ${this.pageNum} de ${this.currentDocName}]:\n${pageText}`);
-      window.app.showToast(`Página ${this.pageNum} vinculada como contexto del Tutor IA`, 'success');
+      window.tutorModule.setContextDocument(`[Página ${this.pageNum} de "${this.currentDocName}"]:
+${pageText}`);
+      window.app.showToast(`Página ${this.pageNum} vinculada al Tutor IA`, 'success');
     } catch (e) {
       console.error(e);
-      window.app.showToast('Error al extraer texto de la página: ' + e.message, 'danger');
+      window.app.showToast('Error al extraer texto: ' + e.message, 'danger');
     }
   }
 }

@@ -115,91 +115,105 @@
       </div>
     </section>
 
-    <!-- TAB 2: VISOR DE PDF CON DESTACADOR -->
+    <!-- TAB 2: VISOR DE PDF CON DESTACADOR Y BIBLIOTECA -->
     <section id="tab-pdf" class="tab-pane">
       <div class="view-header">
         <div class="view-title-group">
-          <h2>📖 Visor de PDF con Destacador</h2>
-          <p>Lee tus clases, resalta con colores, guarda apuntes y envía fragmentos al Tutor IA o a Flashcards.</p>
+          <h2>📖 Biblioteca de Clases & Visor PDF</h2>
+          <p>Sube y almacena tus clases en PDF en tu base de datos local, destaca apuntes y envíalos al Tutor IA.</p>
         </div>
-        <div>
-          <label for="pdf-file-input" class="btn btn-primary cursor-pointer">
-            📂 Abrir PDF desde mi equipo
+        <div style="display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
+          <span id="library-stats-badge" class="badge badge-indigo">Cargando base de datos...</span>
+          <label for="library-file-input" class="btn btn-primary cursor-pointer">
+            + Subir Nueva Clase (PDF)
           </label>
+          <input type="file" id="library-file-input" accept="application/pdf" class="hidden">
           <input type="file" id="pdf-file-input" accept="application/pdf" class="hidden">
         </div>
       </div>
 
-      <div class="pdf-container">
-        <!-- Initial Dropzone -->
-        <div id="pdf-dropzone" class="pdf-dropzone" onclick="document.getElementById('pdf-file-input').click()">
-          <span class="pdf-dropzone-icon">📄</span>
-          <h3>Arrastra y suelta tu archivo PDF aquí</h3>
-          <p>O haz clic para seleccionar tu clase, presentación o apunte de estudio.</p>
-          <button type="button" class="btn btn-secondary">Explorar archivos</button>
+      <!-- VIEW 1: BIBLIOTECA DE CLASES GUARDADAS -->
+      <div id="pdf-library-view" class="pdf-library-view">
+        <div class="library-toolbar">
+          <div class="library-search-wrapper">
+            <span class="library-search-icon">🔍</span>
+            <input type="text" id="library-search-input" class="library-search-input" placeholder="Buscar por nombre de clase o asignatura...">
+          </div>
+          <div>
+            <span class="text-xs" style="color: var(--text-muted);">
+              💾 Almacenamiento IndexedDB persistente (sin límite de 5MB)
+            </span>
+          </div>
         </div>
 
-        <!-- PDF Active Workspace -->
-        <div id="pdf-workspace" class="pdf-workspace hidden">
-          <!-- Toolbar -->
-          <div class="pdf-toolbar">
-            <div class="pdf-toolbar-group">
-              <span id="pdf-current-title" class="pdf-doc-title">Documento.pdf</span>
-              <label for="pdf-file-input" class="btn btn-secondary btn-sm" title="Cambiar archivo">Cambiar</label>
-            </div>
+        <div id="library-classes-grid" class="classes-grid">
+          <!-- Class cards rendered dynamically from database -->
+        </div>
+      </div>
 
-            <div class="pdf-toolbar-group">
-              <button id="pdf-prev-page" class="icon-btn" title="Página anterior">◀</button>
-              <div class="pdf-page-indicator">
-                <span>Pág.</span>
-                <input type="number" id="pdf-page-num" class="pdf-page-input" value="1" min="1">
-                <span>de <span id="pdf-page-count">1</span></span>
-              </div>
-              <button id="pdf-next-page" class="icon-btn" title="Página siguiente">▶</button>
-            </div>
+      <!-- VIEW 2: VISOR PDF ACTIVO -->
+      <div id="pdf-workspace" class="pdf-workspace hidden">
+        <!-- Toolbar -->
+        <div class="pdf-toolbar">
+          <div class="pdf-toolbar-group">
+            <button id="btn-back-to-library" class="btn btn-secondary btn-sm" title="Volver a la lista de clases">
+              ◀ Biblioteca
+            </button>
+            <span id="pdf-current-subject-tag" class="badge badge-indigo">General</span>
+            <span id="pdf-current-title" class="pdf-doc-title">Documento.pdf</span>
+          </div>
 
-            <!-- Highlighter Color Selection -->
-            <div class="pdf-toolbar-group">
-              <div class="highlighter-picker">
-                <span class="highlighter-label">🖍️ Destacador:</span>
-                <button class="highlighter-color-btn active" style="background-color: #fef08a;" data-color="#fef08a" data-name="amarillo" title="Amarillo pastel"></button>
-                <button class="highlighter-color-btn" style="background-color: #a7f3d0;" data-color="#a7f3d0" data-name="verde" title="Verde lima"></button>
-                <button class="highlighter-color-btn" style="background-color: #bae6fd;" data-color="#bae6fd" data-name="celeste" title="Celeste"></button>
-                <button class="highlighter-color-btn" style="background-color: #fbcfe8;" data-color="#fbcfe8" data-name="rosa" title="Rosa"></button>
-              </div>
+          <div class="pdf-toolbar-group">
+            <button id="pdf-prev-page" class="icon-btn" title="Página anterior">◀</button>
+            <div class="pdf-page-indicator">
+              <span>Pág.</span>
+              <input type="number" id="pdf-page-num" class="pdf-page-input" value="1" min="1">
+              <span>de <span id="pdf-page-count">1</span></span>
             </div>
+            <button id="pdf-next-page" class="icon-btn" title="Página siguiente">▶</button>
+          </div>
 
-            <!-- Zoom & Tools -->
-            <div class="pdf-toolbar-group">
-              <button id="pdf-zoom-out" class="icon-btn" title="Alejar zoom">🔍−</button>
-              <button id="pdf-zoom-fit" class="icon-btn" title="Ajustar al ancho">↔</button>
-              <button id="pdf-zoom-in" class="icon-btn" title="Acercar zoom">🔍+</button>
-              <button id="btn-send-page-to-tutor" class="btn btn-secondary btn-sm" title="Vincular texto de esta página al Tutor IA">
-                🤖 Vincular al Tutor
-              </button>
+          <!-- Highlighter Color Selection -->
+          <div class="pdf-toolbar-group">
+            <div class="highlighter-picker">
+              <span class="highlighter-label">🖍️ Destacador:</span>
+              <button class="highlighter-color-btn active" style="background-color: #fef08a;" data-color="#fef08a" data-name="amarillo" title="Amarillo pastel"></button>
+              <button class="highlighter-color-btn" style="background-color: #a7f3d0;" data-color="#a7f3d0" data-name="verde" title="Verde lima"></button>
+              <button class="highlighter-color-btn" style="background-color: #bae6fd;" data-color="#bae6fd" data-name="celeste" title="Celeste"></button>
+              <button class="highlighter-color-btn" style="background-color: #fbcfe8;" data-color="#fbcfe8" data-name="rosa" title="Rosa"></button>
             </div>
           </div>
 
-          <!-- Main Stage -->
-          <div class="pdf-stage-layout">
-            <div class="pdf-viewport-scroller" id="pdf-scroller">
-              <div id="pdf-page-container" class="pdf-page-container">
-                <canvas id="pdf-canvas"></canvas>
-                <div id="pdf-text-layer" class="textLayer"></div>
-                <div id="pdf-highlights-layer" class="pdf-highlights-layer"></div>
-              </div>
-            </div>
-
-            <!-- Highlights Sidebar -->
-            <aside class="pdf-highlights-sidebar">
-              <div class="sidebar-title-bar">
-                <h4>🖍️ Destacados (<span id="pdf-highlights-count">0</span>)</h4>
-              </div>
-              <div id="pdf-highlights-container" class="highlights-scroll-list">
-                <!-- Highlights list rendered dynamically -->
-              </div>
-            </aside>
+          <!-- Zoom & Tools -->
+          <div class="pdf-toolbar-group">
+            <button id="pdf-zoom-out" class="icon-btn" title="Alejar zoom">🔍−</button>
+            <button id="pdf-zoom-fit" class="icon-btn" title="Ajustar al ancho">↔</button>
+            <button id="pdf-zoom-in" class="icon-btn" title="Acercar zoom">🔍+</button>
+            <button id="btn-send-page-to-tutor" class="btn btn-secondary btn-sm" title="Vincular texto de esta página al Tutor IA">
+              🤖 Vincular al Tutor
+            </button>
           </div>
+        </div>
+
+        <!-- Main Stage -->
+        <div class="pdf-stage-layout">
+          <div class="pdf-viewport-scroller" id="pdf-scroller">
+            <div id="pdf-page-container" class="pdf-page-container">
+              <canvas id="pdf-canvas"></canvas>
+              <div id="pdf-text-layer" class="textLayer"></div>
+              <div id="pdf-highlights-layer" class="pdf-highlights-layer"></div>
+            </div>
+          </div>
+
+          <!-- Highlights Sidebar -->
+          <aside class="pdf-highlights-sidebar">
+            <div class="sidebar-title-bar">
+              <h4>🖍️ Destacados (<span id="pdf-highlights-count">0</span>)</h4>
+            </div>
+            <div id="pdf-highlights-container" class="highlights-scroll-list">
+              <!-- Highlights list rendered dynamically -->
+            </div>
+          </aside>
         </div>
       </div>
 
@@ -755,10 +769,15 @@
             <div class="form-group">
               <label for="settings-model">Modelo de Gemini</label>
               <select id="settings-model" class="form-select">
-                <option value="gemini-2.5-flash" selected>Gemini 2.5 Flash (Más rápido y capaz)</option>
+                <option value="gemini-2.5-pro">👑 Gemini 2.5 Pro (Máximo Razonamiento Académico & Profundidad)</option>
+                <option value="gemini-1.5-pro">🧠 Gemini 1.5 Pro (Razonamiento Complejo & 2M Tokens)</option>
+                <option value="gemini-2.5-flash" selected>⚡ Gemini 2.5 Flash (Ultra Rápido y Versátil - Recomendado)</option>
                 <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
                 <option value="gemini-1.5-flash">Gemini 1.5 Flash</option>
               </select>
+              <div class="form-helper">
+                Todos los modelos funcionan con la misma clave de Google AI Studio. <strong>Gemini 2.5 Pro</strong> es ideal para análisis conceptual exhaustivo y preguntas complejas.
+              </div>
             </div>
             <div class="form-group" style="display: flex; flex-direction: column; justify-content: center;">
               <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; margin-top: 1rem;">
@@ -799,6 +818,7 @@
   <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
 
   <!-- App Application Scripts -->
+  <script src="js/db.js"></script>
   <script src="js/storage.js"></script>
   <script src="js/gemini.js"></script>
   <script src="js/calendar.js"></script>

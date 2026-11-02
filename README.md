@@ -11,7 +11,9 @@ Una plataforma moderna, integral y rápida para estudiantes, diseñada para maxi
 - **Categorización por colores:** Exámenes (rojo), Sesiones de estudio (azul), Repasos SRS (verde), y Entregas (amarillo).
 - **Notificaciones de escritorio y sonoras:** Integración con la *Web Notifications API* y alertas Web Audio para avisarte con la anticipación que elijas (15 min, 30 min, 1 hora, 1 día antes).
 
-### 2. 📖 Visor de PDF con Destacador Interactivo
+### 2. 📖 Base de Datos de Clases & Visor de PDF con Destacador
+- **Base de Datos Local (IndexedDB):** Almacena tus clases y presentaciones en PDF directamente en el navegador con persistencia total y sin límite de tamaño (soporta cientos de megabytes).
+- **Biblioteca organizada:** Clasificación por asignaturas, buscador instantáneo, tamaño de archivo, fecha y progreso de lectura (guarda la última página leída).
 - **Renderizado de alto rendimiento:** Basado en PDF.js con soporte HiDPI para lectura nítida de presentaciones, libros y apuntes.
 - **Destacador con 4 colores:** Resalta texto con paleta pastel (amarillo, verde lima, celeste y rosa).
 - **Menú flotante contextual:** Al seleccionar cualquier fragmento de texto con el cursor, puedes:
@@ -21,8 +23,12 @@ Una plataforma moderna, integral y rápida para estudiantes, diseñada para maxi
   - 📝 **Crear Pregunta de Quiz** para evaluar tu retención.
 - **Panel lateral de apuntes:** Accede a todos los textos destacados del documento con salto directo a la página correspondiente con un clic.
 
-### 3. 🤖 Tutor IA (Conectado a Google Gemini)
-- **Modelos compatibles:** Soporta los modelos más veloces y actualizados de Google (`gemini-2.5-flash`, `gemini-2.0-flash`, `gemini-1.5-flash`).
+### 3. 🤖 Tutor IA (Conectado a Google Gemini Flash & Pro)
+- **Modelos compatibles:** Soporta tanto modelos ultrarrápidos como de máximo razonamiento:
+  - 👑 **Gemini 2.5 Pro:** Modelo insignia de razonamiento profundo para análisis conceptual exhaustivo y problemas complejos.
+  - 🧠 **Gemini 1.5 Pro:** Gran capacidad analítica con ventana de contexto de 2 millones de tokens.
+  - ⚡ **Gemini 2.5 Flash / 2.0 Flash / 1.5 Flash:** Respuestas ultra veloces para repaso ágil.
+  - *Todos los modelos funcionan con la misma clave gratuita de Google AI Studio.*
 - **Inyección de contexto:** Permite vincular la página actual del PDF o fragmentos de clases para que el tutor responda con base estricta en tu material de estudio.
 - **Chips de interacción pedagógica rápida:**
   - *Método Feynman*: Explicaciones en lenguaje sencillo y analógico.
