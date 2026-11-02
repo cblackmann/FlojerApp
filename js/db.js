@@ -1,95 +1,30 @@
 /**
- * IndexedDB Local Database & Supabase Sync Engine
- * Soporte Offline-first para Progressive Web App (PWA)
+ * Database Service - Hybrid Supabase Cloud & IndexedDB Offline Engine
  */
-const DB_NAME = 'FlojerApp_PWA_Database';
+const SUPABASE_CONFIG = {
+  url: 'https://baqutfhgejurfxibozxc.supabase.co',
+  anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJhcXV0ZmhnZWp1cmZ4aWJvenhjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTM2NTgzOTUsImV4cCI6MjEwOTIzNDM5NX0.tOWjKHPrUDHfkyu9BaRNMiMP_Z7XawlfZk5v_JKs5GM'
+};
+
+const DB_NAME = 'FlojerApp_Database_v2';
 const DB_VERSION = 1;
-
-const SEED_FOLDERS = [
-  {
-    id: 'folder_cardio',
-    title: 'Cardiología & Fisiología',
-    description: 'Insuficiencia cardíaca, antiarrítmicos y farmacología cardiovascular.',
-    icon: '🫀',
-    color: '#ef4444',
-    created_at: new Date().toISOString()
-  },
-  {
-    id: 'folder_neuro',
-    title: 'Neurología & Neuroanatomía',
-    description: 'Vías motoras, sensitivas y accidentes cerebrovasculares.',
-    icon: '🧠',
-    color: '#8b5cf6',
-    created_at: new Date().toISOString()
-  }
-];
-
-const SEED_CARDS = [
-  {
-    id: 'card_seed_1',
-    folder_id: 'folder_cardio',
-    tipo: 'multiple_choice',
-    pregunta: '¿Cuál de las siguientes combinaciones farmacológicas constituye la "cuádruple terapia" estándar en Insuficiencia Cardíaca con Fracción de Eyección Reducida (IC-FEr)?',
-    opciones: [
-      'Digoxina + Furosemida + Enalapril + Espironolactona',
-      'ARNI (Sacubitril/Valsartán) + Betabloqueador + ARM + iSGLT2',
-      'Amlodipino + Losartán + Hidroclorotiazida + Nitratos',
-      'Aspirina + Clopidogrel + Atorvastatina + Metoprolol'
-    ],
-    respuesta_correcta: 1,
-    explicacion_detallada: `• Opción A (Incorrecta): La digoxina y furosemida controlan síntomas y congestión, pero no demostraron reducción global de mortalidad como pilar inicial.\n• Opción B (CORRECTA): Los 4 pilares fundamentales con beneficio demostrado en sobrevida son: ARNI (o IECA), Betabloqueadores (Carvedilol/Bisoprolol), Antagonistas del Receptor Mineralocorticoide (ARM: Espironolactona) e Inhibidores de SGLT2 (Dapagliflozina/Empagliflozina).\n• Opción C (Incorrecta): Los bloqueadores de canales de calcio dihidropiridínicos no reducen mortalidad en IC-FEr.\n• Opción D (Incorrecta): Es el esquema para prevención secundaria aterotrombótica, no el cuarteto neurohormonal de la IC-FEr.`,
-    etiquetas: ['ICC', 'Farmacología', 'Guías Clínicas'],
-    intervalo: 1,
-    repeticiones: 0,
-    facilidad: 2.50,
-    proxima_revision: new Date(Date.now() - 3600000).toISOString(), // Vencida hoy para prueba inmediata
-    estado: 'new'
-  },
-  {
-    id: 'card_seed_2',
-    folder_id: 'folder_cardio',
-    tipo: 'multiple_choice',
-    pregunta: '¿Por qué se requiere un periodo de lavado estricto de 36 horas al cambiar de un IECA (como Enalapril) a un ARNI (Sacubitril/Valsartán)?',
-    opciones: [
-      'Para evitar hipotensión ortostática fulminante por exceso de vasodilatación',
-      'Para prevenir el riesgo de angioedema potencialmente fatal por acumulación de bradicinina',
-      'Para evitar fallo renal agudo irreversible por hipoperfusión glomerular',
-      'Para permitir que la fracción de eyección se estabilice antes de la nueva dosis'
-    ],
-    respuesta_correcta: 1,
-    explicacion_detallada: `• Opción A (Incorrecta): Aunque puede existir hipotensión, no es el factor de riesgo crítico que dicta las 36 horas de espera.\n• Opción B (CORRECTA): Tanto los IECA como la neprilisina degradan la bradicinina. Bloquear ambas vías de forma simultánea provoca una acumulación tóxica masiva de bradicinina, desencadenando angioedema de vía aérea grave.\n• Opción C (Incorrecta): La función renal se monitoriza, pero el periodo de lavado específico de 36 horas es exclusivamente por seguridad inmunológica/bradicinina.\n• Opción D (Incorrecta): La FEVI no se estabiliza en 36 horas.`,
-    etiquetas: ['ARNI', 'Seguridad Clínica', 'Neprilisina'],
-    intervalo: 1,
-    repeticiones: 0,
-    facilidad: 2.50,
-    proxima_revision: new Date(Date.now() - 7200000).toISOString(),
-    estado: 'new'
-  },
-  {
-    id: 'card_seed_3',
-    folder_id: 'folder_neuro',
-    tipo: 'multiple_choice',
-    pregunta: 'Un paciente presenta hemiplejía contralateral respetando la mitad superior de la cara y afectando preferentemente el miembro superior y el lenguaje (afasia de Broca). ¿Qué vaso arterial se encuentra con mayor probabilidad ocluido?',
-    opciones: [
-      'Arteria Cerebral Anterior (ACA)',
-      'Arteria Cerebral Media (ACM), división superior',
-      'Arteria Cerebral Posterior (ACP)',
-      'Arteria Basilar distal'
-    ],
-    respuesta_correcta: 1,
-    explicacion_detallada: `• Opción A (Incorrecta): La oclusión de la ACA afecta predominantemente el miembro inferior (homúnculo motor medial).\n• Opción B (CORRECTA): La división superior de la ACM irriga la corteza frontal dorsolateral y el área motora primaria de cara/brazo, además del área motora del lenguaje (Broca).\n• Opción C (Incorrecta): La ACP genera principalmente déficit visual (hemianopsia homónima) y sensorial talámico.\n• Opción D (Incorrecta): El síndrome basilar cursa con alteración del tronco encefálico, signos cruzados y compromiso de conciencia.`,
-    etiquetas: ['ACV', 'Neuroanatomía', 'Cerebral Media'],
-    intervalo: 1,
-    repeticiones: 0,
-    facilidad: 2.50,
-    proxima_revision: new Date(Date.now() - 1800000).toISOString(),
-    estado: 'new'
-  }
-];
 
 export class DatabaseService {
   constructor() {
     this.db = null;
+    this.supabase = null;
+    this.initSupabase();
+  }
+
+  initSupabase() {
+    if (window.supabase) {
+      try {
+        this.supabase = window.supabase.createClient(SUPABASE_CONFIG.url, SUPABASE_CONFIG.anonKey);
+        console.log('✅ Conexión con Supabase establecida.');
+      } catch (err) {
+        console.warn('No se pudo inicializar cliente Supabase:', err);
+      }
+    }
   }
 
   async open() {
@@ -100,42 +35,24 @@ export class DatabaseService {
 
       request.onupgradeneeded = (e) => {
         const db = e.target.result;
-
-        // Folders store
-        if (!db.objectStoreNames.contains('folders')) {
-          const folderStore = db.createObjectStore('folders', { keyPath: 'id' });
-          folderStore.createIndex('title', 'title', { unique: false });
-        }
-
-        // Cards store
+        if (!db.objectStoreNames.contains('folders')) db.createObjectStore('folders', { keyPath: 'id' });
         if (!db.objectStoreNames.contains('cards')) {
           const cardStore = db.createObjectStore('cards', { keyPath: 'id' });
           cardStore.createIndex('folder_id', 'folder_id', { unique: false });
-          cardStore.createIndex('proxima_revision', 'proxima_revision', { unique: false });
-          cardStore.createIndex('estado', 'estado', { unique: false });
         }
-
-        // Reviews log store
-        if (!db.objectStoreNames.contains('reviews_log')) {
-          const logStore = db.createObjectStore('reviews_log', { keyPath: 'id' });
-          logStore.createIndex('card_id', 'card_id', { unique: false });
-          logStore.createIndex('reviewed_at', 'reviewed_at', { unique: false });
+        if (!db.objectStoreNames.contains('documents')) {
+          const docStore = db.createObjectStore('documents', { keyPath: 'id' });
+          docStore.createIndex('folder_id', 'folder_id', { unique: false });
         }
-
-        // Metrics store
-        if (!db.objectStoreNames.contains('metrics')) {
-          db.createObjectStore('metrics', { keyPath: 'id' });
-        }
-
-        // Settings store
-        if (!db.objectStoreNames.contains('settings')) {
-          db.createObjectStore('settings', { keyPath: 'key' });
-        }
+        if (!db.objectStoreNames.contains('pdf_blobs')) db.createObjectStore('pdf_blobs', { keyPath: 'id' });
+        if (!db.objectStoreNames.contains('reviews_log')) db.createObjectStore('reviews_log', { keyPath: 'id' });
+        if (!db.objectStoreNames.contains('metrics')) db.createObjectStore('metrics', { keyPath: 'id' });
+        if (!db.objectStoreNames.contains('settings')) db.createObjectStore('settings', { keyPath: 'key' });
       };
 
       request.onsuccess = async (e) => {
         this.db = e.target.result;
-        await this.ensureSeedData();
+        await this.syncFromSupabase();
         resolve(this.db);
       };
 
@@ -143,140 +60,253 @@ export class DatabaseService {
     });
   }
 
-  async ensureSeedData() {
-    const folders = await this.getFolders();
-    if (folders.length === 0) {
-      for (const f of SEED_FOLDERS) await this.saveFolder(f);
-      for (const c of SEED_CARDS) await this.saveCard(c);
-      await this.saveMetrics({
-        id: 'user_default',
-        racha_dias: 3,
-        ultimo_estudio_fecha: new Date().toISOString().split('T')[0],
-        meta_diaria: 20,
-        total_repasos: 14,
-        total_aciertos: 12
-      });
+  /**
+   * Sincroniza datos iniciales desde Supabase al caché local
+   */
+  async syncFromSupabase() {
+    if (!this.supabase) return;
+    try {
+      const { data: cloudFolders } = await this.supabase.from('folders').select('*');
+      if (cloudFolders && cloudFolders.length > 0) {
+        for (const f of cloudFolders) await this.saveLocal('folders', f);
+      }
+
+      const { data: cloudCards } = await this.supabase.from('cards').select('*');
+      if (cloudCards && cloudCards.length > 0) {
+        for (const c of cloudCards) await this.saveLocal('cards', c);
+      }
+
+      const { data: cloudDocs } = await this.supabase.from('documents').select('*');
+      if (cloudDocs && cloudDocs.length > 0) {
+        for (const d of cloudDocs) await this.saveLocal('documents', d);
+      }
+    } catch (err) {
+      console.warn('Sync inicial con Supabase falló (modo offline):', err);
     }
   }
 
-  // --- FOLDERS ---
-  async getFolders() {
+  // --- REPOSITORIO LOCAL (INDEXEDDB) ---
+  async saveLocal(storeName, item) {
     const db = await this.open();
     return new Promise((resolve, reject) => {
-      const tx = db.transaction('folders', 'readonly');
-      const req = tx.objectStore('folders').getAll();
-      req.onsuccess = () => resolve(req.result || []);
-      req.onerror = () => reject(req.error);
-    });
-  }
-
-  async saveFolder(folder) {
-    const db = await this.open();
-    return new Promise((resolve, reject) => {
-      const tx = db.transaction('folders', 'readwrite');
-      const item = {
-        ...folder,
-        id: folder.id || 'fld_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
-        created_at: folder.created_at || new Date().toISOString()
-      };
-      const req = tx.objectStore('folders').put(item);
+      const tx = db.transaction(storeName, 'readwrite');
+      const req = tx.objectStore(storeName).put(item);
       req.onsuccess = () => resolve(item);
       req.onerror = () => reject(req.error);
     });
   }
 
-  async deleteFolder(id) {
+  async getAllLocal(storeName) {
     const db = await this.open();
-    // Delete folder and its cards
-    const cards = await this.getCards(id);
-    for (const c of cards) {
-      await this.deleteCard(c.id);
-    }
     return new Promise((resolve, reject) => {
-      const tx = db.transaction('folders', 'readwrite');
-      const req = tx.objectStore('folders').delete(id);
-      req.onsuccess = () => resolve(true);
+      const tx = db.transaction(storeName, 'readonly');
+      const req = tx.objectStore(storeName).getAll();
+      req.onsuccess = () => resolve(req.result || []);
       req.onerror = () => reject(req.error);
     });
   }
 
-  // --- CARDS ---
-  async getCards(folderId = null) {
+  // --- CARPETAS / ASIGNATURAS ---
+  async getFolders() {
+    let folders = await this.getAllLocal('folders');
+    if (folders.length === 0 && this.supabase) {
+      const { data } = await this.supabase.from('folders').select('*');
+      if (data && data.length > 0) {
+        for (const f of data) await this.saveLocal('folders', f);
+        folders = data;
+      }
+    }
+
+    // Semilla inicial si está completamente vacía
+    if (folders.length === 0) {
+      const initialFolder = {
+        id: 'fld_cardio',
+        title: 'Cardiología & Fisiología',
+        description: 'Insuficiencia cardíaca, antiarrítmicos y farmacología cardiovascular.',
+        icon: '🫀',
+        color: '#ef4444',
+        created_at: new Date().toISOString()
+      };
+      await this.saveFolder(initialFolder);
+      folders = [initialFolder];
+    }
+
+    return folders;
+  }
+
+  async saveFolder(folder) {
+    const item = {
+      ...folder,
+      id: folder.id || 'fld_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+      created_at: folder.created_at || new Date().toISOString()
+    };
+
+    // Guardar en IndexedDB
+    await this.saveLocal('folders', item);
+
+    // Guardar en Supabase en segundo plano
+    if (this.supabase) {
+      this.supabase.from('folders').upsert(item).then(({ error }) => {
+        if (error) console.warn('Supabase folder upsert error:', error);
+      });
+    }
+
+    return item;
+  }
+
+  async deleteFolder(id) {
     const db = await this.open();
-    return new Promise((resolve, reject) => {
-      const tx = db.transaction('cards', 'readonly');
-      const store = tx.objectStore('cards');
-      const req = folderId ? store.index('folder_id').getAll(folderId) : store.getAll();
-      req.onsuccess = () => resolve(req.result || []);
-      req.onerror = () => reject(req.error);
+    await new Promise((resolve) => {
+      const tx = db.transaction('folders', 'readwrite');
+      tx.objectStore('folders').delete(id);
+      tx.oncomplete = () => resolve();
     });
+
+    if (this.supabase) {
+      this.supabase.from('folders').delete().eq('id', id).then();
+    }
+    return true;
+  }
+
+  // --- DOCUMENTOS PDF & STORAGE ---
+  async getDocuments(folderId = null) {
+    const all = await this.getAllLocal('documents');
+    return folderId ? all.filter(d => d.folder_id === folderId) : all;
+  }
+
+  async getPdfData(docId) {
+    const db = await this.open();
+    return new Promise((resolve) => {
+      const tx = db.transaction('pdf_blobs', 'readonly');
+      const req = tx.objectStore('pdf_blobs').get(docId);
+      req.onsuccess = () => resolve(req.result ? req.result.data : null);
+      req.onerror = () => resolve(null);
+    });
+  }
+
+  /**
+   * Sube un PDF a Supabase Storage y a la base de datos local
+   */
+  async uploadPdfFile(file, { folderId = null, title = '' }) {
+    const arrayBuffer = await file.arrayBuffer();
+    const docId = 'doc_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+    const fileName = `${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+    let fileUrl = '';
+
+    // 1. Guardar en Supabase Storage si está conectado
+    if (this.supabase) {
+      try {
+        const { data: uploadData, error: uploadErr } = await this.supabase.storage
+          .from('clases-pdf')
+          .upload(fileName, file, { contentType: 'application/pdf', upsert: true });
+
+        if (!uploadErr && uploadData) {
+          const { data: pubUrl } = this.supabase.storage
+            .from('clases-pdf')
+            .getPublicUrl(fileName);
+          fileUrl = pubUrl?.publicUrl || '';
+        }
+      } catch (e) {
+        console.warn('Error subiendo a Supabase Storage (guardando local):', e);
+      }
+    }
+
+    const docRecord = {
+      id: docId,
+      folder_id: folderId,
+      title: title || file.name.replace(/\.pdf$/i, ''),
+      file_name: file.name,
+      file_size: file.size,
+      file_url: fileUrl,
+      page_count: 1,
+      last_page: 1,
+      created_at: new Date().toISOString()
+    };
+
+    // 2. Guardar metadata y blob en IndexedDB
+    await this.saveLocal('documents', docRecord);
+    await this.saveLocal('pdf_blobs', { id: docId, data: arrayBuffer });
+
+    // 3. Guardar registro en Supabase Database
+    if (this.supabase) {
+      this.supabase.from('documents').upsert(docRecord).then();
+    }
+
+    return { ...docRecord, data: arrayBuffer };
+  }
+
+  async deleteDocument(id) {
+    const db = await this.open();
+    await new Promise((resolve) => {
+      const tx = db.transaction(['documents', 'pdf_blobs'], 'readwrite');
+      tx.objectStore('documents').delete(id);
+      tx.objectStore('pdf_blobs').delete(id);
+      tx.oncomplete = () => resolve();
+    });
+
+    if (this.supabase) {
+      this.supabase.from('documents').delete().eq('id', id).then();
+    }
+  }
+
+  // --- CARDS & FLASHCARDS ---
+  async getCards(folderId = null) {
+    const all = await this.getAllLocal('cards');
+    return folderId ? all.filter(c => c.folder_id === folderId) : all;
   }
 
   async getDueCards(folderId = null) {
     const all = await this.getCards(folderId);
     const now = new Date();
-    return all.filter(c => {
-      if (!c.proxima_revision) return true;
-      return new Date(c.proxima_revision) <= now;
-    });
-  }
-
-  async getCardById(id) {
-    const db = await this.open();
-    return new Promise((resolve, reject) => {
-      const tx = db.transaction('cards', 'readonly');
-      const req = tx.objectStore('cards').get(id);
-      req.onsuccess = () => resolve(req.result);
-      req.onerror = () => reject(req.error);
-    });
+    return all.filter(c => !c.proxima_revision || new Date(c.proxima_revision) <= now);
   }
 
   async saveCard(card) {
-    const db = await this.open();
-    return new Promise((resolve, reject) => {
-      const tx = db.transaction('cards', 'readwrite');
-      const item = {
-        ...card,
-        id: card.id || 'card_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
-        created_at: card.created_at || new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      };
-      const req = tx.objectStore('cards').put(item);
-      req.onsuccess = () => resolve(item);
-      req.onerror = () => reject(req.error);
-    });
+    const item = {
+      ...card,
+      id: card.id || 'card_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
+      created_at: card.created_at || new Date().toISOString()
+    };
+
+    await this.saveLocal('cards', item);
+
+    if (this.supabase) {
+      this.supabase.from('cards').upsert(item).then();
+    }
+    return item;
   }
 
   async saveBatchCards(cardsArray) {
     const saved = [];
-    for (const card of cardsArray) {
-      const res = await this.saveCard(card);
-      saved.push(res);
+    for (const c of cardsArray) {
+      const item = await this.saveCard(c);
+      saved.push(item);
     }
     return saved;
   }
 
   async deleteCard(id) {
     const db = await this.open();
-    return new Promise((resolve, reject) => {
+    await new Promise((resolve) => {
       const tx = db.transaction('cards', 'readwrite');
-      const req = tx.objectStore('cards').delete(id);
-      req.onsuccess = () => resolve(true);
-      req.onerror = () => reject(req.error);
+      tx.objectStore('cards').delete(id);
+      tx.oncomplete = () => resolve();
     });
+
+    if (this.supabase) {
+      this.supabase.from('cards').delete().eq('id', id).then();
+    }
   }
 
   // --- REVIEWS & LOGS ---
   async logReview(cardId, grade, responseTimeMs, isCorrect, srsUpdate) {
-    const db = await this.open();
-    // 1. Update the card with SRS parameters
-    const card = await this.getCardById(cardId);
+    const cards = await this.getCards();
+    const card = cards.find(c => c.id === cardId);
     if (card) {
       Object.assign(card, srsUpdate);
       await this.saveCard(card);
     }
 
-    // 2. Log entry for telemetry
     const logEntry = {
       id: 'log_' + Date.now(),
       card_id: cardId,
@@ -286,43 +316,33 @@ export class DatabaseService {
       reviewed_at: new Date().toISOString()
     };
 
-    await new Promise((resolve, reject) => {
-      const tx = db.transaction('reviews_log', 'readwrite');
-      const req = tx.objectStore('reviews_log').put(logEntry);
-      req.onsuccess = () => resolve(true);
-      req.onerror = () => reject(req.error);
-    });
+    await this.saveLocal('reviews_log', logEntry);
 
-    // 3. Update user metrics & streak
+    if (this.supabase) {
+      this.supabase.from('reviews_log').insert(logEntry).then();
+    }
+
     await this.registerStudyActivity(isCorrect);
   }
 
-  // --- METRICS & STREAK ---
   async getMetrics() {
-    const db = await this.open();
-    return new Promise((resolve, reject) => {
-      const tx = db.transaction('metrics', 'readonly');
-      const req = tx.objectStore('metrics').get('user_default');
-      req.onsuccess = () => resolve(req.result || {
-        id: 'user_default',
-        racha_dias: 0,
-        ultimo_estudio_fecha: null,
-        meta_diaria: 20,
-        total_repasos: 0,
-        total_aciertos: 0
-      });
-      req.onerror = () => reject(req.error);
-    });
+    const all = await this.getAllLocal('metrics');
+    return all.find(m => m.id === 'user_default') || {
+      id: 'user_default',
+      racha_dias: 0,
+      ultimo_estudio_fecha: null,
+      meta_diaria: 20,
+      total_repasos: 0,
+      total_aciertos: 0
+    };
   }
 
   async saveMetrics(metrics) {
-    const db = await this.open();
-    return new Promise((resolve, reject) => {
-      const tx = db.transaction('metrics', 'readwrite');
-      const req = tx.objectStore('metrics').put({ ...metrics, id: 'user_default' });
-      req.onsuccess = () => resolve(req.result);
-      req.onerror = () => reject(req.error);
-    });
+    const item = { ...metrics, id: 'user_default' };
+    await this.saveLocal('metrics', item);
+    if (this.supabase) {
+      this.supabase.from('user_metrics').upsert(item).then();
+    }
   }
 
   async registerStudyActivity(isCorrect) {
@@ -330,18 +350,14 @@ export class DatabaseService {
     const todayStr = new Date().toISOString().split('T')[0];
 
     metrics.total_repasos = (metrics.total_repasos || 0) + 1;
-    if (isCorrect) {
-      metrics.total_aciertos = (metrics.total_aciertos || 0) + 1;
-    }
+    if (isCorrect) metrics.total_aciertos = (metrics.total_aciertos || 0) + 1;
 
     if (metrics.ultimo_estudio_fecha !== todayStr) {
       const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
       if (metrics.ultimo_estudio_fecha === yesterday) {
         metrics.racha_dias = (metrics.racha_dias || 0) + 1;
-      } else if (!metrics.ultimo_estudio_fecha) {
-        metrics.racha_dias = 1;
       } else {
-        metrics.racha_dias = 1; // Racha reiniciada
+        metrics.racha_dias = 1;
       }
       metrics.ultimo_estudio_fecha = todayStr;
     }

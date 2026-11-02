@@ -5,6 +5,7 @@ import { db } from './db.js';
 import { QuizEngine } from './quiz.js';
 import { FlashcardEngine } from './study.js';
 import { GeneratorModule } from './generator.js';
+import { PDFModule } from './pdf.js';
 
 class AppController {
   constructor() {
@@ -12,6 +13,7 @@ class AppController {
     this.quizEngine = null;
     this.flashcardEngine = null;
     this.generatorModule = null;
+    this.pdfModule = null;
   }
 
   async init() {
@@ -76,8 +78,10 @@ class AppController {
 
     if (viewName === 'dashboard') {
       this.renderDashboard();
+    } else if (viewName === 'pdf') {
+      this.renderPdfView();
     } else if (viewName === 'generator') {
-      this.renderGenerator();
+      this.renderGenerator(params.prefill);
     } else if (viewName === 'quiz') {
       this.startQuizView(params.cards);
     } else if (viewName === 'study') {
@@ -90,6 +94,7 @@ class AppController {
     const allCards = await db.getCards();
     const dueCards = await db.getDueCards();
     const metrics = await db.getMetrics();
+    const allDocs = await db.getDocuments();
 
     // Render Metrics & Daily Goals
     const streakEl = document.getElementById('dash-streak-count');
@@ -101,7 +106,7 @@ class AppController {
     if (streakEl) streakEl.textContent = `${metrics.racha_dias || 0} días`;
 
     const dailyGoal = metrics.meta_diaria || 20;
-    const todayReviewed = Math.min(metrics.total_repasos || 0, dailyGoal); // simplified today counter
+    const todayReviewed = Math.min(metrics.total_repasos || 0, dailyGoal);
     const goalPct = Math.min(Math.round((todayReviewed / dailyGoal) * 100), 100);
 
     if (goalTextEl) goalTextEl.textContent = `${todayReviewed} / ${dailyGoal} tarjetas repasadas`;
@@ -145,6 +150,7 @@ class AppController {
     foldersContainer.innerHTML = folders.map(folder => {
       const folderCards = allCards.filter(c => c.folder_id === folder.id);
       const folderDue = dueCards.filter(c => c.folder_id === folder.id);
+      const folderDocs = allDocs.filter(d => d.folder_id === folder.id);
       const mastered = folderCards.filter(c => c.estado === 'mastered').length;
 
       return `
@@ -161,8 +167,8 @@ class AppController {
           <p class="text-xs text-slate-400 mb-4 line-clamp-2">${folder.description || 'Sin descripción'}</p>
 
           <div class="flex items-center justify-between text-xs text-slate-400 pb-3 mb-3 border-b border-slate-700/50">
-            <span>${folderCards.length} preguntas</span>
-            <span>${mastered} dominadas</span>
+            <span>${folderCards.length} preguntas (${mastered} dominadas)</span>
+            <span>📄 ${folderDocs.length} PDFs</span>
           </div>
 
           <div class="grid grid-cols-2 gap-2">
@@ -198,12 +204,22 @@ class AppController {
     foldersContainer.querySelectorAll('[data-folder-delete]').forEach(btn => {
       btn.addEventListener('click', async () => {
         const fId = btn.dataset.folderDelete;
-        if (confirm('¿Deseas eliminar esta asignatura y todas sus preguntas?')) {
+        if (confirm('¿Deseas eliminar esta asignatura, sus documentos y preguntas?')) {
           await db.deleteFolder(fId);
           await this.renderDashboard();
         }
       });
     });
+  }
+
+  async renderPdfView() {
+    const container = document.getElementById('pdf-module-mount');
+    if (!container) return;
+
+    this.pdfModule = new PDFModule(container, (extractedText, folderId) => {
+      this.switchView('generator', { prefill: { text: extractedText, folderId } });
+    });
+    await this.pdfModule.render();
   }
 
   async startQuizView(cards) {
@@ -224,16 +240,26 @@ class AppController {
     this.flashcardEngine.startSession(cardsToStudy);
   }
 
-  renderGenerator() {
+  renderGenerator(prefill = null) {
     const container = document.getElementById('generator-mount');
     if (!container) return;
     this.generatorModule = new GeneratorModule(container, () => this.switchView('dashboard'));
-    this.generatorModule.render();
+    this.generatorModule.render().then(() => {
+      if (prefill) {
+        if (prefill.text) {
+          const textInput = document.getElementById('gen-notes-input');
+          if (textInput) textInput.value = prefill.text;
+        }
+        if (prefill.folderId) {
+          const folderSelect = document.getElementById('gen-folder-select');
+          if (folderSelect) folderSelect.value = prefill.folderId;
+        }
+      }
+    });
   }
 
   // --- MODALS ---
   bindModals() {
-    // Backdrop click
     document.querySelectorAll('.modal-backdrop').forEach(modal => {
       modal.addEventListener('click', (e) => {
         if (e.target === modal) modal.classList.add('hidden');
@@ -243,7 +269,6 @@ class AppController {
       });
     });
 
-    // Form New Folder
     document.getElementById('form-new-folder')?.addEventListener('submit', async (e) => {
       e.preventDefault();
       const title = document.getElementById('input-folder-title').value.trim();
@@ -257,7 +282,6 @@ class AppController {
       await this.renderDashboard();
     });
 
-    // Form Settings
     document.getElementById('form-settings')?.addEventListener('submit', async (e) => {
       e.preventDefault();
       const key = document.getElementById('input-gemini-key').value.trim();

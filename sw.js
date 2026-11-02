@@ -13,6 +13,7 @@ const ASSETS_TO_CACHE = [
   './js/quiz.js',
   './js/study.js',
   './js/generator.js',
+  './js/pdf.js',
   './js/app.js'
 ];
 
