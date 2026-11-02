@@ -1,12 +1,10 @@
-# Sistema operativo
+# Archivos del sistema
 Thumbs.db
 Desktop.ini
 .DS_Store
 
-# Logs y temporales
+# Temporales y logs
 *.log
 *.tmp
-
-# Entorno y credenciales locales futuras
 .env
 .env.local

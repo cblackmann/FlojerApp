@@ -1,235 +1,293 @@
 /**
- * Main Application Orchestrator - FlojerApp
+ * FlojerApp - Main Application Controller & Dashboard
  */
-class FlojerApp {
+import { db } from './db.js';
+import { QuizEngine } from './quiz.js';
+import { FlashcardEngine } from './study.js';
+import { GeneratorModule } from './generator.js';
+
+class AppController {
   constructor() {
-    this.currentTab = 'calendario';
-    this.toastTimeout = null;
+    this.currentView = 'dashboard';
+    this.quizEngine = null;
+    this.flashcardEngine = null;
+    this.generatorModule = null;
   }
 
-  init() {
-    this.applyTheme();
-    this.bindNavigation();
-    this.bindSettings();
+  async init() {
+    this.bindGlobalNavigation();
     this.bindModals();
-    this.bindFloatingTutor();
+    this.registerServiceWorker();
+    await this.renderDashboard();
+  }
 
-    // Initialize individual modules
-    if (window.calendarModule) window.calendarModule.init();
-    if (window.pdfViewerModule) window.pdfViewerModule.init();
-    if (window.tutorModule) window.tutorModule.init();
-    if (window.flashcardsModule) window.flashcardsModule.init();
-    if (window.quizModule) window.quizModule.init();
-
-    // Check query params if any
-    const hash = window.location.hash.replace('#', '');
-    if (['calendario', 'pdf', 'tutor', 'flashcards', 'quiz'].includes(hash)) {
-      this.switchTab(hash);
+  registerServiceWorker() {
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js').then(reg => {
+          console.log('FlojerApp Service Worker registrado con éxito:', reg.scope);
+        }).catch(err => {
+          console.warn('Error registrando Service Worker:', err);
+        });
+      });
     }
   }
 
-  bindNavigation() {
-    document.querySelectorAll('.nav-tab-btn').forEach(btn => {
+  bindGlobalNavigation() {
+    // Nav items
+    document.querySelectorAll('.app-nav-btn').forEach(btn => {
       btn.addEventListener('click', () => {
-        const tab = btn.dataset.tab;
-        this.switchTab(tab);
+        const view = btn.dataset.view;
+        this.switchView(view);
       });
     });
 
-    // Theme toggle
-    document.getElementById('btn-toggle-theme')?.addEventListener('click', () => {
-      this.toggleTheme();
+    // Logo click goes to dashboard
+    document.getElementById('brand-home')?.addEventListener('click', () => {
+      this.switchView('dashboard');
     });
 
     // Settings button
     document.getElementById('btn-open-settings')?.addEventListener('click', () => {
       this.openSettingsModal();
     });
+
+    // New folder button
+    document.getElementById('btn-new-folder')?.addEventListener('click', () => {
+      this.openNewFolderModal();
+    });
   }
 
-  switchTab(tabName) {
-    this.currentTab = tabName;
-    window.location.hash = tabName;
+  switchView(viewName, params = {}) {
+    this.currentView = viewName;
 
-    // Update nav buttons
-    document.querySelectorAll('.nav-tab-btn').forEach(btn => {
-      btn.classList.toggle('active', btn.dataset.tab === tabName);
+    // Toggle active nav styling
+    document.querySelectorAll('.app-nav-btn').forEach(btn => {
+      btn.classList.toggle('bg-indigo-600/20', btn.dataset.view === viewName);
+      btn.classList.toggle('text-indigo-400', btn.dataset.view === viewName);
+      btn.classList.toggle('border-indigo-500/30', btn.dataset.view === viewName);
     });
 
-    // Update tab panes
-    document.querySelectorAll('.tab-pane').forEach(pane => {
-      pane.classList.toggle('active', pane.id === `tab-${tabName}`);
-    });
+    // Hide all view containers
+    document.querySelectorAll('.view-container').forEach(el => el.classList.add('hidden'));
 
-    // If PDF tab selected, trigger page re-render if loaded
-    if (tabName === 'pdf' && window.pdfViewerModule && window.pdfViewerModule.pdfDoc) {
-      window.pdfViewerModule.renderPage(window.pdfViewerModule.pageNum);
+    const targetEl = document.getElementById(`view-${viewName}`);
+    if (targetEl) targetEl.classList.remove('hidden');
+
+    if (viewName === 'dashboard') {
+      this.renderDashboard();
+    } else if (viewName === 'generator') {
+      this.renderGenerator();
+    } else if (viewName === 'quiz') {
+      this.startQuizView(params.cards);
+    } else if (viewName === 'study') {
+      this.startStudyView(params.cards);
     }
   }
 
-  bindFloatingTutor() {
-    const floatBtn = document.getElementById('floating-tutor-btn');
-    floatBtn?.addEventListener('click', () => {
-      this.switchTab('tutor');
-    });
-  }
+  async renderDashboard() {
+    const folders = await db.getFolders();
+    const allCards = await db.getCards();
+    const dueCards = await db.getDueCards();
+    const metrics = await db.getMetrics();
 
-  bindModals() {
-    // Backdrop click and close buttons
-    document.querySelectorAll('.modal-overlay').forEach(modal => {
-      modal.addEventListener('click', (e) => {
-        if (e.target === modal) {
-          this.closeModal(modal.id);
-        }
-      });
+    // Render Metrics & Daily Goals
+    const streakEl = document.getElementById('dash-streak-count');
+    const goalTextEl = document.getElementById('dash-goal-text');
+    const goalFillEl = document.getElementById('dash-goal-fill');
+    const dueCountEl = document.getElementById('dash-due-count');
+    const totalCountEl = document.getElementById('dash-total-count');
 
-      modal.querySelectorAll('.modal-close-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-          this.closeModal(modal.id);
-        });
-      });
-    });
+    if (streakEl) streakEl.textContent = `${metrics.racha_dias || 0} días`;
 
-    // Escape key closes modals
-    window.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') {
-        document.querySelectorAll('.modal-overlay.active').forEach(modal => {
-          modal.classList.remove('active');
-        });
-      }
-    });
-  }
+    const dailyGoal = metrics.meta_diaria || 20;
+    const todayReviewed = Math.min(metrics.total_repasos || 0, dailyGoal); // simplified today counter
+    const goalPct = Math.min(Math.round((todayReviewed / dailyGoal) * 100), 100);
 
-  closeModal(modalId) {
-    const modal = document.getElementById(modalId);
-    if (modal) modal.classList.remove('active');
-  }
+    if (goalTextEl) goalTextEl.textContent = `${todayReviewed} / ${dailyGoal} tarjetas repasadas`;
+    if (goalFillEl) goalFillEl.style.width = `${goalPct}%`;
+    if (dueCountEl) dueCountEl.textContent = dueCards.length;
+    if (totalCountEl) totalCountEl.textContent = allCards.length;
 
-  openSettingsModal() {
-    const modal = document.getElementById('modal-settings');
-    const settings = window.appStorage.getSettings();
-
-    document.getElementById('settings-api-key').value = settings.apiKey || '';
-    document.getElementById('settings-model').value = settings.geminiModel || 'gemini-2.5-flash';
-    document.getElementById('settings-sound').checked = settings.soundEnabled !== false;
-
-    modal.classList.add('active');
-  }
-
-  bindSettings() {
-    // Save settings
-    document.getElementById('form-settings')?.addEventListener('submit', (e) => {
-      e.preventDefault();
-      const apiKey = document.getElementById('settings-api-key').value.trim();
-      const geminiModel = document.getElementById('settings-model').value;
-      const soundEnabled = document.getElementById('settings-sound').checked;
-
-      const current = window.appStorage.getSettings();
-      current.apiKey = apiKey;
-      current.geminiModel = geminiModel;
-      current.soundEnabled = soundEnabled;
-
-      window.appStorage.saveSettings(current);
-      this.closeModal('modal-settings');
-      this.showToast('Configuración guardada correctamente.', 'success');
-
-      if (window.tutorModule) window.tutorModule.updateStatusBanner();
-    });
-
-    // Test API key button
-    document.getElementById('btn-test-api-key')?.addEventListener('click', async () => {
-      const apiKey = document.getElementById('settings-api-key').value.trim();
-      const model = document.getElementById('settings-model').value;
-      const statusEl = document.getElementById('api-key-test-status');
-
-      if (!apiKey) {
-        statusEl.innerHTML = '<span class="text-red">Ingresa una clave primero.</span>';
-        return;
-      }
-
-      statusEl.innerHTML = '<span>⏳ Conectando con Google Gemini...</span>';
-      try {
-        await window.geminiService.testApiKey(apiKey, model);
-        statusEl.innerHTML = '<span class="text-green">✅ ¡Conexión exitosa! Clave válida.</span>';
-      } catch (err) {
-        statusEl.innerHTML = `<span class="text-red">❌ Error: ${err.message}</span>`;
-      }
-    });
-
-    // Export Data Backup
-    document.getElementById('btn-export-backup')?.addEventListener('click', () => {
-      const json = window.appStorage.exportAllData();
-      const blob = new Blob([json], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `FlojerApp_Backup_${new Date().toISOString().split('T')[0]}.json`;
-      a.click();
-      URL.revokeObjectURL(url);
-      this.showToast('Respaldo descargado.', 'success');
-    });
-
-    // Import Data Backup
-    const fileImport = document.getElementById('input-import-backup');
-    document.getElementById('btn-import-backup')?.addEventListener('click', () => {
-      fileImport?.click();
-    });
-
-    fileImport?.addEventListener('change', (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = (evt) => {
-        const ok = window.appStorage.importAllData(evt.target.result);
-        if (ok) {
-          this.showToast('¡Datos restaurados con éxito! Recargando...', 'success');
-          setTimeout(() => window.location.reload(), 1200);
-        } else {
-          this.showToast('Error al importar el archivo JSON.', 'danger');
+    // Quick Start Button
+    const btnQuickStart = document.getElementById('btn-quick-start');
+    if (btnQuickStart) {
+      btnQuickStart.disabled = dueCards.length === 0;
+      btnQuickStart.innerHTML = dueCards.length > 0 
+        ? `🚀 Continuar Estudio (${dueCards.length} vencidas)` 
+        : `✅ Todo al día por hoy`;
+      
+      btnQuickStart.onclick = () => {
+        if (dueCards.length > 0) {
+          this.switchView('quiz', { cards: dueCards });
         }
       };
-      reader.readAsText(file);
+    }
+
+    // Render Folders Grid
+    const foldersContainer = document.getElementById('dash-folders-grid');
+    if (!foldersContainer) return;
+
+    if (folders.length === 0) {
+      foldersContainer.innerHTML = `
+        <div class="col-span-full text-center py-12 border border-dashed border-slate-700 rounded-2xl bg-slate-800/40">
+          <span class="text-4xl block mb-2">📁</span>
+          <p class="text-slate-300 font-semibold mb-3">Aún no tienes asignaturas creadas</p>
+          <button id="btn-empty-new-folder" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition">
+            + Crear Asignatura
+          </button>
+        </div>
+      `;
+      foldersContainer.querySelector('#btn-empty-new-folder')?.addEventListener('click', () => this.openNewFolderModal());
+      return;
+    }
+
+    foldersContainer.innerHTML = folders.map(folder => {
+      const folderCards = allCards.filter(c => c.folder_id === folder.id);
+      const folderDue = dueCards.filter(c => c.folder_id === folder.id);
+      const mastered = folderCards.filter(c => c.estado === 'mastered').length;
+
+      return `
+        <div class="bg-slate-800/80 border border-slate-700/80 hover:border-indigo-500/50 rounded-2xl p-5 shadow-lg transition-all hover:-translate-y-1 group">
+          <div class="flex items-center justify-between mb-3">
+            <span class="text-2xl p-2 rounded-xl bg-slate-900 border border-slate-700/60">${folder.icon || '📁'}</span>
+            <div class="flex items-center gap-1">
+              ${folderDue.length > 0 ? `<span class="px-2 py-0.5 text-[11px] font-bold rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/30">${folderDue.length} pendientes</span>` : ''}
+              <button data-folder-delete="${folder.id}" class="text-slate-500 hover:text-rose-400 p-1 transition" title="Eliminar asignatura">🗑️</button>
+            </div>
+          </div>
+
+          <h3 class="text-base font-bold text-slate-100 mb-1 group-hover:text-indigo-300 transition">${folder.title}</h3>
+          <p class="text-xs text-slate-400 mb-4 line-clamp-2">${folder.description || 'Sin descripción'}</p>
+
+          <div class="flex items-center justify-between text-xs text-slate-400 pb-3 mb-3 border-b border-slate-700/50">
+            <span>${folderCards.length} preguntas</span>
+            <span>${mastered} dominadas</span>
+          </div>
+
+          <div class="grid grid-cols-2 gap-2">
+            <button data-folder-quiz="${folder.id}" class="py-2 px-3 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs rounded-xl shadow-md transition text-center">
+              📝 Quiz (${folderDue.length || folderCards.length})
+            </button>
+            <button data-folder-study="${folder.id}" class="py-2 px-3 bg-slate-700/70 hover:bg-slate-700 text-slate-200 font-bold text-xs rounded-xl transition text-center">
+              🗂️ Flashcards
+            </button>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    // Bind Folder Buttons
+    foldersContainer.querySelectorAll('[data-folder-quiz]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const fId = btn.dataset.folderQuiz;
+        const due = await db.getDueCards(fId);
+        const all = await db.getCards(fId);
+        this.switchView('quiz', { cards: due.length > 0 ? due : all });
+      });
+    });
+
+    foldersContainer.querySelectorAll('[data-folder-study]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const fId = btn.dataset.folderStudy;
+        const all = await db.getCards(fId);
+        this.switchView('study', { cards: all });
+      });
+    });
+
+    foldersContainer.querySelectorAll('[data-folder-delete]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const fId = btn.dataset.folderDelete;
+        if (confirm('¿Deseas eliminar esta asignatura y todas sus preguntas?')) {
+          await db.deleteFolder(fId);
+          await this.renderDashboard();
+        }
+      });
     });
   }
 
-  toggleTheme() {
-    const settings = window.appStorage.getSettings();
-    const newTheme = settings.theme === 'light' ? 'dark' : 'light';
-    settings.theme = newTheme;
-    window.appStorage.saveSettings(settings);
-    this.applyTheme();
+  async startQuizView(cards) {
+    const container = document.getElementById('quiz-engine-mount');
+    if (!container) return;
+
+    const cardsToStudy = cards && cards.length > 0 ? cards : await db.getDueCards();
+    this.quizEngine = new QuizEngine(container, () => this.switchView('dashboard'));
+    this.quizEngine.startSession(cardsToStudy);
   }
 
-  applyTheme() {
-    const settings = window.appStorage.getSettings();
-    const isLight = settings.theme === 'light';
-    document.documentElement.classList.toggle('light-theme', isLight);
-    const themeBtn = document.getElementById('btn-toggle-theme');
-    if (themeBtn) {
-      themeBtn.innerHTML = isLight ? '🌙' : '☀️';
-      themeBtn.title = isLight ? 'Modo Oscuro' : 'Modo Claro';
-    }
+  async startStudyView(cards) {
+    const container = document.getElementById('study-engine-mount');
+    if (!container) return;
+
+    const cardsToStudy = cards && cards.length > 0 ? cards : await db.getCards();
+    this.flashcardEngine = new FlashcardEngine(container, () => this.switchView('dashboard'));
+    this.flashcardEngine.startSession(cardsToStudy);
   }
 
-  showToast(message, type = 'info', duration = 4000) {
-    const toast = document.getElementById('app-toast');
-    if (!toast) return;
+  renderGenerator() {
+    const container = document.getElementById('generator-mount');
+    if (!container) return;
+    this.generatorModule = new GeneratorModule(container, () => this.switchView('dashboard'));
+    this.generatorModule.render();
+  }
 
-    if (this.toastTimeout) clearTimeout(this.toastTimeout);
+  // --- MODALS ---
+  bindModals() {
+    // Backdrop click
+    document.querySelectorAll('.modal-backdrop').forEach(modal => {
+      modal.addEventListener('click', (e) => {
+        if (e.target === modal) modal.classList.add('hidden');
+      });
+      modal.querySelectorAll('.btn-close-modal').forEach(btn => {
+        btn.addEventListener('click', () => modal.classList.add('hidden'));
+      });
+    });
 
-    toast.className = `toast-notification toast-${type} active`;
-    toast.innerHTML = `
-      <span class="toast-message">${message}</span>
-      <button class="toast-close" onclick="this.parentElement.classList.remove('active')">&times;</button>
-    `;
+    // Form New Folder
+    document.getElementById('form-new-folder')?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const title = document.getElementById('input-folder-title').value.trim();
+      const description = document.getElementById('input-folder-desc').value.trim();
+      const icon = document.getElementById('input-folder-icon').value.trim() || '📁';
+      if (!title) return;
 
-    this.toastTimeout = setTimeout(() => {
-      toast.classList.remove('active');
-    }, duration);
+      await db.saveFolder({ title, description, icon });
+      document.getElementById('modal-new-folder').classList.add('hidden');
+      document.getElementById('form-new-folder').reset();
+      await this.renderDashboard();
+    });
+
+    // Form Settings
+    document.getElementById('form-settings')?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const key = document.getElementById('input-gemini-key').value.trim();
+      const model = document.getElementById('input-gemini-model').value;
+
+      await db.setSetting('gemini_api_key', key);
+      await db.setSetting('gemini_model', model);
+
+      document.getElementById('modal-settings').classList.add('hidden');
+      alert('Configuración guardada exitosamente.');
+    });
+  }
+
+  openNewFolderModal() {
+    document.getElementById('modal-new-folder')?.classList.remove('hidden');
+  }
+
+  async openSettingsModal() {
+    const modal = document.getElementById('modal-settings');
+    const key = await db.getSetting('gemini_api_key', '');
+    const model = await db.getSetting('gemini_model', 'gemini-2.5-flash');
+
+    document.getElementById('input-gemini-key').value = key;
+    document.getElementById('input-gemini-model').value = model;
+
+    modal?.classList.remove('hidden');
   }
 }
 
 window.addEventListener('DOMContentLoaded', () => {
-  window.app = new FlojerApp();
+  window.app = new AppController();
   window.app.init();
 });

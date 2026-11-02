@@ -1,460 +1,312 @@
 /**
- * Multiple-Choice Quiz Engine (Exams & Self-Assessment)
+ * Interactive Quiz & Assessment Engine
+ * Preguntas de opción múltiple con retroalimentación oculta, desglose paso a paso y calificación SRS
  */
-class QuizModule {
-  constructor() {
-    this.activeQuiz = null;
-    this.currentQuestionIndex = 0;
-    this.userAnswers = [];
-    this.score = 0;
-    this.hasAnsweredCurrent = false;
+import { db } from './db.js';
+import { SRSEngine, SRS_GRADES } from './srs.js';
+
+export class QuizEngine {
+  constructor(containerElement, onSessionComplete) {
+    this.container = containerElement;
+    this.onSessionComplete = onSessionComplete;
+    this.queue = [];
+    this.currentIndex = 0;
+    this.selectedOption = null;
+    this.hasAnswered = false;
+    this.questionStartTime = null;
+    this.timerInterval = null;
+    this.sessionStats = { total: 0, correct: 0, totalTimeMs: 0 };
   }
 
-  init() {
-    this.bindEvents();
-    this.renderQuizList();
-  }
-
-  bindEvents() {
-    // Open AI Generator
-    document.getElementById('btn-open-ai-quiz')?.addEventListener('click', () => {
-      this.openAiGeneratorModal();
-    });
-
-    // Open Manual Creator
-    document.getElementById('btn-open-manual-quiz')?.addEventListener('click', () => {
-      this.openManualCreateModal();
-    });
-
-    // Form AI Submit
-    document.getElementById('form-ai-quiz')?.addEventListener('submit', (e) => {
-      e.preventDefault();
-      this.handleAiGenerate();
-    });
-
-    // Form Manual Submit
-    document.getElementById('form-manual-quiz')?.addEventListener('submit', (e) => {
-      e.preventDefault();
-      this.handleManualCreate();
-    });
-
-    // Next Question Button
-    document.getElementById('btn-quiz-next')?.addEventListener('click', () => {
-      this.nextQuestion();
-    });
-
-    // Exit Quiz
-    document.getElementById('btn-exit-quiz')?.addEventListener('click', () => {
-      this.exitQuizMode();
-    });
-
-    // Restart Quiz
-    document.getElementById('btn-restart-quiz')?.addEventListener('click', () => {
-      if (this.activeQuiz) this.startQuizSession(this.activeQuiz.id);
-    });
-
-    // Convert missed questions to flashcards
-    document.getElementById('btn-quiz-to-flashcards')?.addEventListener('click', () => {
-      this.convertMissedToFlashcards();
-    });
-  }
-
-  renderQuizList() {
-    const container = document.getElementById('quiz-collections-grid');
-    if (!container) return;
-
-    const quizzes = window.appStorage.getQuizzes();
-    if (quizzes.length === 0) {
-      container.innerHTML = `
-        <div class="empty-state">
-          <span class="empty-icon">📝</span>
-          <h3>No tienes cuestionarios creados aún</h3>
-          <p>Genera cuestionarios de opción múltiple con IA sobre cualquier tema o crea los tuyos.</p>
-          <div class="empty-actions">
-            <button class="btn btn-primary" onclick="window.quizModule.openAiGeneratorModal()">
-              ✨ Generar Quiz con Gemini IA
-            </button>
-            <button class="btn btn-secondary" onclick="window.quizModule.openManualCreateModal()">
-              + Crear Pregunta Manual
-            </button>
-          </div>
-        </div>
-      `;
+  startSession(cards) {
+    if (!cards || cards.length === 0) {
+      this.renderEmptyState();
       return;
     }
 
-    container.innerHTML = quizzes.map(q => {
-      const count = q.questions.length;
-      return `
-        <div class="deck-card">
-          <div class="deck-header">
-            <span class="badge badge-indigo">${q.category || 'Evaluación'}</span>
-            <div class="deck-actions">
-              <button class="icon-btn-danger" title="Eliminar cuestionario" onclick="window.quizModule.deleteQuiz('${q.id}')">🗑️</button>
-            </div>
-          </div>
-          <h3 class="deck-title">${q.title}</h3>
-          <p class="deck-desc">${q.description || `${count} preguntas de selección múltiple con retroalimentación.`}</p>
-
-          <div class="quiz-card-meta">
-            <span>🎯 ${count} Preguntas</span>
-            <span>⚡ Selección Múltiple (A-D)</span>
-          </div>
-
-          <div class="deck-footer">
-            <button class="btn btn-primary w-full" onclick="window.quizModule.startQuizSession('${q.id}')">
-              ▶️ Comenzar Examen (${count} preguntas)
-            </button>
-          </div>
-        </div>
-      `;
-    }).join('');
-  }
-
-  openAiGeneratorModal(prefilledTopic = '') {
-    const modal = document.getElementById('modal-ai-quiz');
-    const topicInput = document.getElementById('ai-quiz-topic');
-    if (prefilledTopic && topicInput) {
-      topicInput.value = prefilledTopic;
-    }
-    modal?.classList.add('active');
-  }
-
-  openCreateModalWithText(text) {
-    this.openAiGeneratorModal();
-    const contextInput = document.getElementById('ai-quiz-context');
-    if (contextInput) {
-      contextInput.value = text;
-    }
-  }
-
-  openManualCreateModal() {
-    this.populateQuizSelectDropdown();
-    const modal = document.getElementById('modal-manual-quiz');
-    modal?.classList.add('active');
-  }
-
-  populateQuizSelectDropdown() {
-    const select = document.getElementById('manual-quiz-select');
-    if (!select) return;
-    const quizzes = window.appStorage.getQuizzes();
-    select.innerHTML = `
-      <option value="__new__">+ Crear nuevo cuestionario...</option>
-      ${quizzes.map(q => `<option value="${q.id}">${q.title}</option>`).join('')}
-    `;
-  }
-
-  async handleAiGenerate() {
-    const topic = document.getElementById('ai-quiz-topic').value.trim();
-    const context = document.getElementById('ai-quiz-context').value.trim();
-    const count = parseInt(document.getElementById('ai-quiz-count').value, 10) || 5;
-    const difficulty = document.getElementById('ai-quiz-difficulty').value;
-    const btnSubmit = document.getElementById('btn-submit-ai-quiz');
-
-    if (!topic) {
-      window.app.showToast('Por favor escribe el tema para el cuestionario.', 'warning');
-      return;
-    }
-
-    const origText = btnSubmit.innerHTML;
-    btnSubmit.innerHTML = '⏳ Generando preguntas con Gemini...';
-    btnSubmit.disabled = true;
-
-    try {
-      const questions = await window.geminiService.generateQuiz(topic, context, count, difficulty);
-
-      const newQuiz = {
-        id: 'quiz_' + Date.now(),
-        title: topic,
-        category: 'Examen IA',
-        description: `Quiz generado con Gemini (${difficulty}) - ${questions.length} preguntas.`,
-        questions: questions
-      };
-
-      window.appStorage.saveQuiz(newQuiz);
-      window.app.closeModal('modal-ai-quiz');
-      document.getElementById('form-ai-quiz').reset();
-
-      this.renderQuizList();
-      window.app.showToast(`¡Cuestionario "${topic}" creado con ${questions.length} preguntas!`, 'success');
-
-      if (confirm(`Se han generado ${questions.length} preguntas. ¿Deseas resolver el quiz ahora?`)) {
-        this.startQuizSession(newQuiz.id);
-      }
-    } catch (e) {
-      console.error(e);
-      window.app.showToast('Error al generar quiz: ' + e.message, 'danger');
-    } finally {
-      btnSubmit.innerHTML = origText;
-      btnSubmit.disabled = false;
-    }
-  }
-
-  handleManualCreate() {
-    const quizSelect = document.getElementById('manual-quiz-select').value;
-    const questionText = document.getElementById('manual-quiz-question').value.trim();
-    const opt0 = document.getElementById('manual-opt-0').value.trim();
-    const opt1 = document.getElementById('manual-opt-1').value.trim();
-    const opt2 = document.getElementById('manual-opt-2').value.trim();
-    const opt3 = document.getElementById('manual-opt-3').value.trim();
-    const correctIndex = parseInt(document.querySelector('input[name="manual-correct"]:checked')?.value || '0', 10);
-    const explanation = document.getElementById('manual-quiz-explanation').value.trim();
-
-    if (!questionText || !opt0 || !opt1 || !opt2 || !opt3) {
-      window.app.showToast('Por favor completa la pregunta y las 4 opciones.', 'warning');
-      return;
-    }
-
-    let quizId = quizSelect;
-    if (quizId === '__new__') {
-      const newTitle = prompt('Nombre del nuevo cuestionario:', 'Cuestionario de Estudio');
-      if (!newTitle) return;
-      const newQuiz = {
-        id: 'quiz_' + Date.now(),
-        title: newTitle,
-        category: 'Personal',
-        description: 'Preguntas creadas manualmente.',
-        questions: []
-      };
-      window.appStorage.saveQuiz(newQuiz);
-      quizId = newQuiz.id;
-    }
-
-    const quizzes = window.appStorage.getQuizzes();
-    const quiz = quizzes.find(q => q.id === quizId);
-    if (!quiz) return;
-
-    quiz.questions.push({
-      id: 'q_' + Date.now(),
-      question: questionText,
-      options: [opt0, opt1, opt2, opt3],
-      correctIndex: correctIndex,
-      explanation: explanation || 'Respuesta verificada.'
-    });
-
-    window.appStorage.saveQuiz(quiz);
-    window.app.closeModal('modal-manual-quiz');
-    document.getElementById('form-manual-quiz').reset();
-    this.renderQuizList();
-    window.app.showToast('Pregunta guardada exitosamente.', 'success');
-  }
-
-  deleteQuiz(id) {
-    if (confirm('¿Deseas eliminar este cuestionario?')) {
-      window.appStorage.deleteQuiz(id);
-      this.renderQuizList();
-      window.app.showToast('Cuestionario eliminado.', 'info');
-    }
-  }
-
-  /* Interactive Quiz Play Mode */
-  startQuizSession(quizId) {
-    const quizzes = window.appStorage.getQuizzes();
-    const quiz = quizzes.find(q => q.id === quizId);
-    if (!quiz || quiz.questions.length === 0) {
-      window.app.showToast('Este cuestionario no contiene preguntas.', 'warning');
-      return;
-    }
-
-    this.activeQuiz = quiz;
-    this.currentQuestionIndex = 0;
-    this.userAnswers = [];
-    this.score = 0;
-    this.hasAnsweredCurrent = false;
-
-    document.getElementById('quiz-dashboard-view').classList.add('hidden');
-    document.getElementById('quiz-play-view').classList.remove('hidden');
-    document.getElementById('quiz-results-view').classList.add('hidden');
-
-    document.getElementById('quiz-play-title').textContent = quiz.title;
-
+    this.queue = [...cards];
+    this.currentIndex = 0;
+    this.sessionStats = { total: cards.length, correct: 0, totalTimeMs: 0 };
     this.renderCurrentQuestion();
   }
 
+  renderEmptyState() {
+    this.container.innerHTML = `
+      <div class="text-center py-16 px-4 bg-slate-800/60 rounded-2xl border border-slate-700/60 max-w-xl mx-auto shadow-xl">
+        <span class="text-5xl block mb-4">🎉</span>
+        <h3 class="text-2xl font-bold text-slate-100 mb-2">¡Todo al día!</h3>
+        <p class="text-slate-400 mb-6">No tienes preguntas ni tarjetas pendientes para revisión en este momento según el algoritmo de repetición espaciada.</p>
+        <button id="btn-quiz-back-dash" class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-xl shadow-lg shadow-indigo-600/30 transition">
+          Volver al Dashboard
+        </button>
+      </div>
+    `;
+    this.container.querySelector('#btn-quiz-back-dash')?.addEventListener('click', () => {
+      if (this.onSessionComplete) this.onSessionComplete();
+    });
+  }
+
   renderCurrentQuestion() {
-    const q = this.activeQuiz.questions[this.currentQuestionIndex];
-    const total = this.activeQuiz.questions.length;
+    if (this.currentIndex >= this.queue.length) {
+      this.finishSession();
+      return;
+    }
 
-    this.hasAnsweredCurrent = false;
+    const card = this.queue[this.currentIndex];
+    this.selectedOption = null;
+    this.hasAnswered = false;
+    this.questionStartTime = Date.now();
 
-    // Header counter and progress
-    document.getElementById('quiz-progress-text').textContent = `Pregunta ${this.currentQuestionIndex + 1} de ${total}`;
-    const pct = Math.round(((this.currentQuestionIndex) / total) * 100);
-    document.getElementById('quiz-progress-fill').style.width = `${pct}%`;
-
-    // Question statement
-    document.getElementById('quiz-question-statement').textContent = q.question;
-
-    // Options rendering
-    const optionsContainer = document.getElementById('quiz-options-container');
-    optionsContainer.innerHTML = '';
-
+    const progressPct = Math.round(((this.currentIndex) / this.queue.length) * 100);
     const letters = ['A', 'B', 'C', 'D'];
-    q.options.forEach((optText, index) => {
-      const optBtn = document.createElement('button');
-      optBtn.type = 'button';
-      optBtn.className = 'quiz-option-btn';
-      optBtn.innerHTML = `
-        <span class="option-letter">${letters[index]}</span>
-        <span class="option-text">${optText}</span>
-        <span class="option-indicator"></span>
-      `;
-      optBtn.addEventListener('click', () => this.handleSelectOption(index));
-      optionsContainer.appendChild(optBtn);
+
+    this.container.innerHTML = `
+      <div class="max-w-3xl mx-auto bg-slate-800/80 backdrop-blur border border-slate-700/80 rounded-2xl p-6 md:p-8 shadow-2xl transition-all">
+        
+        <!-- Header: Barra de progreso, contador y cronómetro -->
+        <div class="flex items-center justify-between gap-4 mb-6 pb-4 border-b border-slate-700/60">
+          <div class="flex items-center gap-3">
+            <span class="px-2.5 py-1 bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 rounded-lg text-xs font-bold uppercase tracking-wider">
+              Pregunta ${this.currentIndex + 1} de ${this.queue.length}
+            </span>
+            ${card.etiquetas?.length ? `<span class="text-xs text-slate-400 hidden sm:inline">🏷️ ${card.etiquetas.join(', ')}</span>` : ''}
+          </div>
+          
+          <div class="flex items-center gap-4">
+            <span id="quiz-elapsed-timer" class="text-xs font-mono font-semibold text-slate-400 bg-slate-900/60 px-3 py-1.5 rounded-lg border border-slate-700/50">
+              ⏱️ 0.0s
+            </span>
+            <button id="btn-abort-quiz" class="text-xs text-slate-400 hover:text-rose-400 transition" title="Salir de la sesión">
+              ✕ Salir
+            </button>
+          </div>
+        </div>
+
+        <!-- Barra de progreso visual -->
+        <div class="w-full bg-slate-700/40 h-1.5 rounded-full mb-6 overflow-hidden">
+          <div class="bg-gradient-to-r from-indigo-500 to-emerald-400 h-full transition-all duration-300" style="width: ${progressPct}%"></div>
+        </div>
+
+        <!-- Enunciado de la Pregunta -->
+        <h3 class="text-lg md:text-xl font-bold text-slate-100 leading-relaxed mb-6">
+          ${card.pregunta}
+        </h3>
+
+        <!-- Opciones A, B, C, D -->
+        <div id="quiz-options-list" class="space-y-3 mb-6">
+          ${card.opciones.map((optText, idx) => `
+            <button type="button" data-index="${idx}" class="quiz-opt-btn w-full text-left p-4 rounded-xl border border-slate-700 bg-slate-900/50 hover:bg-slate-700/40 hover:border-indigo-500/50 text-slate-200 transition flex items-start gap-3.5 group">
+              <span class="w-7 h-7 rounded-lg bg-slate-800 text-slate-300 font-bold text-xs flex items-center justify-center shrink-0 border border-slate-700 group-hover:border-indigo-400/50 group-hover:text-indigo-300">
+                ${letters[idx]}
+              </span>
+              <span class="text-sm md:text-base leading-snug flex-1">${optText}</span>
+            </button>
+          `).join('')}
+        </div>
+
+        <!-- Contenedor de Retroalimentación Oculta (se devela al responder) -->
+        <div id="quiz-feedback-panel" class="hidden mt-6 p-5 rounded-xl border border-slate-700/80 bg-slate-900/80 animate-fadeIn">
+          <div class="flex items-center gap-2.5 mb-3">
+            <span id="feedback-badge" class="px-2.5 py-1 text-xs font-bold rounded-lg uppercase tracking-wider"></span>
+            <span class="text-xs text-slate-400 font-semibold">Desglose de Justificación Académica:</span>
+          </div>
+          <div id="feedback-explanation" class="text-sm text-slate-300 leading-relaxed whitespace-pre-line mb-6 font-normal"></div>
+
+          <!-- Botones de Calificación del Algoritmo SM-2 -->
+          <div class="border-t border-slate-800 pt-4">
+            <p class="text-xs text-slate-400 font-semibold mb-3 text-center sm:text-left">
+              ¿Qué tan fácil te resultó recordar este concepto? (Calibra tu algoritmo SM-2):
+            </p>
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+              <button data-grade="1" class="srs-grade-btn py-2 px-3 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/30 text-xs font-bold transition flex flex-col items-center">
+                <span>🔴 Otra vez</span>
+                <span class="text-[10px] font-normal opacity-80 mt-0.5">Fallo total [1]</span>
+              </button>
+              <button data-grade="2" class="srs-grade-btn py-2 px-3 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 text-xs font-bold transition flex flex-col items-center">
+                <span>🟡 Difícil</span>
+                <span class="text-[10px] font-normal opacity-80 mt-0.5">Con esfuerzo [2]</span>
+              </button>
+              <button data-grade="3" class="srs-grade-btn py-2 px-3 rounded-lg bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 border border-blue-500/30 text-xs font-bold transition flex flex-col items-center">
+                <span>🔵 Bueno</span>
+                <span class="text-[10px] font-normal opacity-80 mt-0.5">Estándar [3]</span>
+              </button>
+              <button data-grade="4" class="srs-grade-btn py-2 px-3 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 text-xs font-bold transition flex flex-col items-center">
+                <span>🟢 Fácil</span>
+                <span class="text-[10px] font-normal opacity-80 mt-0.5">Instantáneo [4]</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    `;
+
+    this.bindQuestionEvents();
+    this.startTimer();
+  }
+
+  startTimer() {
+    if (this.timerInterval) clearInterval(this.timerInterval);
+    const timerEl = this.container.querySelector('#quiz-elapsed-timer');
+    this.timerInterval = setInterval(() => {
+      const elapsed = ((Date.now() - this.questionStartTime) / 1000).toFixed(1);
+      if (timerEl) timerEl.textContent = `⏱️ ${elapsed}s`;
+    }, 100);
+  }
+
+  stopTimer() {
+    if (this.timerInterval) {
+      clearInterval(this.timerInterval);
+      this.timerInterval = null;
+    }
+  }
+
+  bindQuestionEvents() {
+    const card = this.queue[this.currentIndex];
+
+    // Opciones click
+    this.container.querySelectorAll('.quiz-opt-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        if (this.hasAnswered) return;
+        const index = parseInt(btn.dataset.index, 10);
+        this.handleSelectOption(index);
+      });
     });
 
-    // Hide feedback & Next button until answered
-    document.getElementById('quiz-explanation-box').classList.add('hidden');
-    document.getElementById('btn-quiz-next').classList.add('hidden');
+    // Salir
+    this.container.querySelector('#btn-abort-quiz')?.addEventListener('click', () => {
+      if (confirm('¿Deseas interrumpir la sesión de estudio actual?')) {
+        this.stopTimer();
+        if (this.onSessionComplete) this.onSessionComplete();
+      }
+    });
+
+    // Botones de calificación SRS
+    this.container.querySelectorAll('.srs-grade-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const grade = parseInt(btn.dataset.grade, 10);
+        this.handleSrsRate(grade);
+      });
+    });
+
+    // Atajos de teclado (1, 2, 3, 4)
+    this.keyHandler = (e) => {
+      if (!this.hasAnswered) return;
+      if (['1', '2', '3', '4'].includes(e.key)) {
+        this.handleSrsRate(parseInt(e.key, 10));
+      }
+    };
+    window.addEventListener('keydown', this.keyHandler);
   }
 
   handleSelectOption(selectedIndex) {
-    if (this.hasAnsweredCurrent) return;
-    this.hasAnsweredCurrent = true;
+    this.stopTimer();
+    this.hasAnswered = true;
+    this.selectedOption = selectedIndex;
 
-    const q = this.activeQuiz.questions[this.currentQuestionIndex];
-    const isCorrect = selectedIndex === q.correctIndex;
+    const card = this.queue[this.currentIndex];
+    const isCorrect = selectedIndex === card.respuesta_correcta;
 
     if (isCorrect) {
-      this.score++;
-      if (window.calendarModule) window.calendarModule.playChime();
+      this.sessionStats.correct++;
     }
 
-    this.userAnswers.push({
-      question: q,
-      selectedIndex,
-      isCorrect
-    });
-
-    // Highlight options
-    const optionBtns = document.querySelectorAll('.quiz-option-btn');
-    optionBtns.forEach((btn, idx) => {
-      btn.disabled = true;
-      if (idx === q.correctIndex) {
-        btn.classList.add('option-correct');
+    // Resaltar alternativas
+    this.container.querySelectorAll('.quiz-opt-btn').forEach((btn, idx) => {
+      btn.classList.add('cursor-default');
+      if (idx === card.respuesta_correcta) {
+        btn.classList.remove('bg-slate-900/50', 'border-slate-700');
+        btn.classList.add('bg-emerald-950/60', 'border-emerald-500/80', 'text-emerald-200');
+        btn.querySelector('span:first-child').classList.add('bg-emerald-600', 'text-white', 'border-emerald-400');
       } else if (idx === selectedIndex && !isCorrect) {
-        btn.classList.add('option-wrong');
+        btn.classList.remove('bg-slate-900/50', 'border-slate-700');
+        btn.classList.add('bg-rose-950/60', 'border-rose-500/80', 'text-rose-200');
+        btn.querySelector('span:first-child').classList.add('bg-rose-600', 'text-white', 'border-rose-400');
+      } else {
+        btn.classList.add('opacity-40');
       }
     });
 
-    // Show Explanation Box
-    const explanationBox = document.getElementById('quiz-explanation-box');
-    const resultTag = document.getElementById('quiz-feedback-tag');
-    const expText = document.getElementById('quiz-explanation-text');
+    // Revelar panel de explicación
+    const feedbackPanel = this.container.querySelector('#quiz-feedback-panel');
+    const feedbackBadge = this.container.querySelector('#feedback-badge');
+    const feedbackText = this.container.querySelector('#feedback-explanation');
 
     if (isCorrect) {
-      resultTag.textContent = '🎉 ¡Correcto!';
-      resultTag.className = 'badge badge-green';
+      feedbackBadge.textContent = '🎉 ¡Respuesta Correcta!';
+      feedbackBadge.className = 'px-2.5 py-1 text-xs font-bold rounded-lg uppercase tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-500/30';
     } else {
-      resultTag.textContent = '❌ Incorrecto';
-      resultTag.className = 'badge badge-red';
+      feedbackBadge.textContent = '❌ Respuesta Incorrecta';
+      feedbackBadge.className = 'px-2.5 py-1 text-xs font-bold rounded-lg uppercase tracking-wider bg-rose-500/20 text-rose-300 border border-rose-500/30';
     }
 
-    expText.textContent = q.explanation || 'Opción correcta verificada.';
-    explanationBox.classList.remove('hidden');
+    feedbackText.textContent = card.explicacion_detallada;
+    feedbackPanel.classList.remove('hidden');
 
-    // Show Next or Finish Button
-    const nextBtn = document.getElementById('btn-quiz-next');
-    const isLast = this.currentQuestionIndex === this.activeQuiz.questions.length - 1;
-    nextBtn.textContent = isLast ? '🏁 Ver Resultados' : 'Siguiente Pregunta ➔';
-    nextBtn.classList.remove('hidden');
+    // Desplazar vista hacia la explicación suavemente
+    feedbackPanel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
 
-  nextQuestion() {
-    this.currentQuestionIndex++;
-    if (this.currentQuestionIndex < this.activeQuiz.questions.length) {
-      this.renderCurrentQuestion();
-    } else {
-      this.finishQuiz();
+  async handleSrsRate(grade) {
+    if (this.keyHandler) {
+      window.removeEventListener('keydown', this.keyHandler);
     }
+
+    const card = this.queue[this.currentIndex];
+    const responseTimeMs = Date.now() - this.questionStartTime;
+    this.sessionStats.totalTimeMs += responseTimeMs;
+
+    const isCorrect = this.selectedOption === card.respuesta_correcta;
+    const srsUpdate = SRSEngine.calculateNextReview(card, grade);
+
+    // Persistir resultado y métrica en la base de datos
+    await db.logReview(card.id, grade, responseTimeMs, isCorrect, srsUpdate);
+
+    this.currentIndex++;
+    this.renderCurrentQuestion();
   }
 
-  finishQuiz() {
-    document.getElementById('quiz-play-view').classList.add('hidden');
-    document.getElementById('quiz-results-view').classList.remove('hidden');
+  finishSession() {
+    this.stopTimer();
+    const total = this.sessionStats.total;
+    const correct = this.sessionStats.correct;
+    const pct = total > 0 ? Math.round((correct / total) * 100) : 0;
+    const avgTimeSec = total > 0 ? ((this.sessionStats.totalTimeMs / total) / 1000).toFixed(1) : '0';
 
-    const total = this.activeQuiz.questions.length;
-    const pct = Math.round((this.score / total) * 100);
-
-    document.getElementById('quiz-results-score').textContent = `${this.score} / ${total}`;
-    document.getElementById('quiz-results-pct').textContent = `${pct}% de acierto`;
-
-    const badgeEl = document.getElementById('quiz-results-badge');
-    if (pct >= 80) {
-      badgeEl.textContent = '🏆 ¡Excelente dominio de la materia!';
-      badgeEl.className = 'badge badge-green';
-      if (window.confetti) {
-        window.confetti({ particleCount: 100, spread: 80, origin: { y: 0.5 } });
-      }
-    } else if (pct >= 60) {
-      badgeEl.textContent = '👍 Buen resultado, refuerza los errores';
-      badgeEl.className = 'badge badge-amber';
-    } else {
-      badgeEl.textContent = '⚠️ Se recomienda repasar con flashcards';
-      badgeEl.className = 'badge badge-red';
+    // Disparar confeti si el rendimiento fue alto
+    if (window.confetti && pct >= 60) {
+      window.confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
     }
 
-    // Missed questions button
-    const missed = this.userAnswers.filter(a => !a.isCorrect);
-    const toFlashcardsBtn = document.getElementById('btn-quiz-to-flashcards');
-    if (missed.length > 0) {
-      toFlashcardsBtn.classList.remove('hidden');
-      toFlashcardsBtn.textContent = `🗂️ Crear Flashcards de ${missed.length} preguntas falladas`;
-    } else {
-      toFlashcardsBtn.classList.add('hidden');
-    }
+    this.container.innerHTML = `
+      <div class="max-w-xl mx-auto bg-slate-800/90 border border-slate-700/80 rounded-2xl p-8 shadow-2xl text-center">
+        <span class="text-6xl block mb-4">🏆</span>
+        <h2 class="text-2xl font-bold text-slate-100 mb-2">¡Sesión de Estudio Completada!</h2>
+        <p class="text-slate-400 text-sm mb-6">Tus repasos han sido procesados y las próximas revisiones programadas por el algoritmo.</p>
 
-    // Render questions review breakdown
-    const reviewContainer = document.getElementById('quiz-review-breakdown');
-    if (reviewContainer) {
-      reviewContainer.innerHTML = this.userAnswers.map((ans, idx) => `
-        <div class="quiz-review-item ${ans.isCorrect ? 'review-correct' : 'review-wrong'}">
-          <div class="review-header">
-            <span>Pregunta ${idx + 1}: ${ans.isCorrect ? '✅ Acertada' : '❌ Fallada'}</span>
+        <div class="grid grid-cols-3 gap-3 mb-8">
+          <div class="bg-slate-900/70 p-4 rounded-xl border border-slate-700/60">
+            <span class="text-2xl font-extrabold text-indigo-400 block mb-1">${correct}/${total}</span>
+            <span class="text-[11px] uppercase font-bold text-slate-400">Aciertos</span>
           </div>
-          <p class="review-question"><strong>${ans.question.question}</strong></p>
-          <p class="review-answer">Tu respuesta: <em>${ans.question.options[ans.selectedIndex]}</em></p>
-          ${!ans.isCorrect ? `<p class="review-correct-answer">Respuesta correcta: <strong>${ans.question.options[ans.question.correctIndex]}</strong></p>` : ''}
-          <p class="review-explanation">💡 ${ans.question.explanation}</p>
+          <div class="bg-slate-900/70 p-4 rounded-xl border border-slate-700/60">
+            <span class="text-2xl font-extrabold ${pct >= 70 ? 'text-emerald-400' : 'text-amber-400'} block mb-1">${pct}%</span>
+            <span class="text-[11px] uppercase font-bold text-slate-400">Tasa de Acierto</span>
+          </div>
+          <div class="bg-slate-900/70 p-4 rounded-xl border border-slate-700/60">
+            <span class="text-2xl font-extrabold text-blue-400 block mb-1">${avgTimeSec}s</span>
+            <span class="text-[11px] uppercase font-bold text-slate-400">Promedio/Pregunta</span>
+          </div>
         </div>
-      `).join('');
-    }
-  }
 
-  convertMissedToFlashcards() {
-    const missed = this.userAnswers.filter(a => !a.isCorrect);
-    if (missed.length === 0) return;
+        <button id="btn-finish-quiz-session" class="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl shadow-lg shadow-indigo-600/30 transition">
+          Continuar al Dashboard
+        </button>
+      </div>
+    `;
 
-    const cards = missed.map(m => ({
-      id: 'fc_from_quiz_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
-      front: m.question.question,
-      back: `Respuesta correcta:\n${m.question.options[m.question.correctIndex]}\n\nExplicación:\n${m.question.explanation}`,
-      hint: 'Pregunta fallada en quiz de evaluación',
-      state: 'new',
-      reviews: 0,
-      lastReviewed: null
-    }));
-
-    const newDeck = {
-      id: 'deck_reinforce_' + Date.now(),
-      title: `Refuerzo: ${this.activeQuiz.title}`,
-      category: 'Refuerzo de Errores',
-      description: `Generado a partir de ${missed.length} preguntas falladas en el examen.`,
-      cards: cards
-    };
-
-    window.appStorage.saveDeck(newDeck);
-    window.app.showToast(`¡Se ha creado el mazo de refuerzo con ${cards.length} tarjetas!`, 'success');
-    window.app.switchTab('flashcards');
-    window.flashcardsModule.renderDecksList();
-  }
-
-  exitQuizMode() {
-    document.getElementById('quiz-play-view').classList.add('hidden');
-    document.getElementById('quiz-results-view').classList.add('hidden');
-    document.getElementById('quiz-dashboard-view').classList.remove('hidden');
-    this.renderQuizList();
+    this.container.querySelector('#btn-finish-quiz-session')?.addEventListener('click', () => {
+      if (this.onSessionComplete) this.onSessionComplete();
+    });
   }
 }
-
-window.quizModule = new QuizModule();

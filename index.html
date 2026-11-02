@@ -1,831 +1,251 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="es" class="dark">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>FlojerApp - App de Estudio Inteligente (Calendario, PDF, Tutor IA, Flashcards y Quiz)</title>
+  <title>FlojerApp - Spaced Repetition & Active Recall PWA</title>
   
-  <!-- PDF.js CSS & Scripts -->
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf_viewer.min.css">
+  <!-- PWA Meta Tags & Manifest -->
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#6366f1">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="FlojerApp">
   
-  <!-- App Styles -->
-  <link rel="stylesheet" href="css/main.css">
-  <link rel="stylesheet" href="css/calendar.css">
-  <link rel="stylesheet" href="css/pdf-viewer.css">
-  <link rel="stylesheet" href="css/tutor.css">
-  <link rel="stylesheet" href="css/study.css">
+  <!-- Tailwind CSS via CDN (Modern JIT Engine) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            primary: { 500: '#6366f1', 600: '#4f46e5' }
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Canvas Confetti CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
+
+  <!-- Custom CSS -->
+  <link rel="stylesheet" href="css/app.css">
 </head>
-<body>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col font-sans selection:bg-indigo-500 selection:text-white">
 
-  <!-- App Header -->
-  <header class="app-header">
-    <div class="brand-section">
-      <div class="brand-logo">⚡</div>
-      <div>
-        <h1 class="brand-title">FlojerApp</h1>
-        <span class="text-xs" style="color: var(--text-muted); display: block;">Estudio Inteligente & Tutor IA</span>
+  <!-- =========================================================================
+       APP HEADER / NAVBAR
+       ========================================================================= -->
+  <header class="sticky top-0 z-40 bg-slate-900/80 backdrop-blur-md border-b border-slate-800">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
+      
+      <!-- Logo & Brand -->
+      <div id="brand-home" class="flex items-center gap-3 cursor-pointer group">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center text-xl shadow-lg shadow-indigo-600/30 group-hover:scale-105 transition">
+          ⚡
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="font-extrabold text-lg text-slate-100 tracking-tight">FlojerApp</h1>
+            <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-400 border border-indigo-500/30">PWA</span>
+          </div>
+          <p class="text-[11px] text-slate-400 font-medium">Active Recall & Repetición Espaciada</p>
+        </div>
       </div>
-    </div>
 
-    <nav class="nav-tabs-bar">
-      <button class="nav-tab-btn active" data-tab="calendario">
-        📅 <span>Calendario</span>
-      </button>
-      <button class="nav-tab-btn" data-tab="pdf">
-        📖 <span>Visor PDF</span>
-      </button>
-      <button class="nav-tab-btn" data-tab="tutor">
-        🤖 <span>Tutor IA</span>
-      </button>
-      <button class="nav-tab-btn" data-tab="flashcards">
-        🗂️ <span>Flashcards</span>
-      </button>
-      <button class="nav-tab-btn" data-tab="quiz">
-        📝 <span>Selección Múltiple</span>
-      </button>
-    </nav>
+      <!-- Center / Right Actions -->
+      <div class="flex items-center gap-3">
+        
+        <!-- Streak Indicator Pill -->
+        <div class="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800/90 border border-slate-700/60 text-xs font-bold text-amber-400 shadow-sm" title="Racha consecutiva de estudio">
+          <span>🔥</span>
+          <span id="dash-streak-count">0 días</span>
+        </div>
 
-    <div class="header-actions">
-      <button id="btn-toggle-theme" class="icon-btn" title="Cambiar Tema">🌙</button>
-      <button id="btn-open-settings" class="icon-btn" title="Configuración y Gemini API">⚙️</button>
+        <!-- Navigation Tabs -->
+        <nav class="flex items-center gap-1 bg-slate-800/80 p-1 rounded-xl border border-slate-700/60">
+          <button data-view="dashboard" class="app-nav-btn px-3 py-1.5 rounded-lg text-xs font-bold transition bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 flex items-center gap-1.5">
+            <span>📊</span>
+            <span class="hidden md:inline">Dashboard</span>
+          </button>
+          <button data-view="generator" class="app-nav-btn px-3 py-1.5 rounded-lg text-xs font-bold text-slate-300 hover:text-white transition flex items-center gap-1.5">
+            <span>✨</span>
+            <span class="hidden md:inline">Generador IA</span>
+          </button>
+        </nav>
+
+        <!-- Settings Button -->
+        <button id="btn-open-settings" class="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 transition" title="Configuración & Gemini API">
+          ⚙️
+        </button>
+
+      </div>
     </div>
   </header>
 
-  <!-- App Main Content Area -->
-  <main class="app-main">
+  <!-- =========================================================================
+       MAIN CONTENT CONTAINER
+       ========================================================================= -->
+  <main class="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 py-6 md:py-8">
 
-    <!-- TAB 1: CALENDARIO CON NOTIFICACIONES -->
-    <section id="tab-calendario" class="tab-pane active">
-      <div class="view-header">
-        <div class="view-title-group">
-          <h2>📅 Calendario de Estudio & Exámenes</h2>
-          <p>Planifica tus sesiones de estudio y recibe notificaciones antes de cada fecha importante.</p>
-        </div>
-        <div style="display: flex; align-items: center; gap: 0.75rem;">
-          <button id="notif-permission-badge" class="badge badge-gray cursor-pointer" title="Activar notificaciones">
-            🔔 Activar Notificaciones
-          </button>
-          <button id="btn-add-event-modal" class="btn btn-primary">
-            + Agendar Fecha
-          </button>
-        </div>
-      </div>
-
-      <div class="calendar-layout">
-        <div class="calendar-main-card">
-          <div class="calendar-nav-bar">
-            <h3 id="cal-month-title" class="calendar-month-title">Mes Año</h3>
-            <div class="calendar-nav-controls">
-              <button id="cal-prev-btn" class="icon-btn" title="Mes anterior">◀</button>
-              <button id="cal-today-btn" class="btn btn-secondary btn-sm">Hoy</button>
-              <button id="cal-next-btn" class="icon-btn" title="Mes siguiente">▶</button>
-            </div>
-          </div>
-
-          <div class="calendar-weekdays-header">
-            <div>Lun</div>
-            <div>Mar</div>
-            <div>Mié</div>
-            <div>Jue</div>
-            <div>Vie</div>
-            <div>Sáb</div>
-            <div>Dom</div>
-          </div>
-
-          <div id="cal-days-grid" class="calendar-days-grid">
-            <!-- Calendar days rendered dynamically -->
-          </div>
-        </div>
-
-        <aside class="calendar-sidebar-card">
-          <div class="sidebar-header">
-            <div>
-              <h3>Agenda del Día</h3>
-              <span id="cal-selected-date-text" class="text-xs" style="color: var(--text-secondary);">Selecciona un día</span>
-            </div>
-            <button class="btn btn-secondary btn-sm" onclick="window.calendarModule.openAddEventModal()">
-              + Nuevo
-            </button>
-          </div>
-
-          <div id="cal-events-list" class="cal-events-list">
-            <!-- Events rendered dynamically -->
-          </div>
-        </aside>
-      </div>
-    </section>
-
-    <!-- TAB 2: VISOR DE PDF CON DESTACADOR Y BIBLIOTECA -->
-    <section id="tab-pdf" class="tab-pane">
-      <div class="view-header">
-        <div class="view-title-group">
-          <h2>📖 Biblioteca de Clases & Visor PDF</h2>
-          <p>Sube y almacena tus clases en PDF en tu base de datos local, destaca apuntes y envíalos al Tutor IA.</p>
-        </div>
-        <div style="display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
-          <span id="library-stats-badge" class="badge badge-indigo">Cargando base de datos...</span>
-          <label for="library-file-input" class="btn btn-primary cursor-pointer">
-            + Subir Nueva Clase (PDF)
-          </label>
-          <input type="file" id="library-file-input" accept="application/pdf" class="hidden">
-          <input type="file" id="pdf-file-input" accept="application/pdf" class="hidden">
-        </div>
-      </div>
-
-      <!-- VIEW 1: BIBLIOTECA DE CLASES GUARDADAS -->
-      <div id="pdf-library-view" class="pdf-library-view">
-        <div class="library-toolbar">
-          <div class="library-search-wrapper">
-            <span class="library-search-icon">🔍</span>
-            <input type="text" id="library-search-input" class="library-search-input" placeholder="Buscar por nombre de clase o asignatura...">
-          </div>
-          <div>
-            <span class="text-xs" style="color: var(--text-muted);">
-              💾 Almacenamiento IndexedDB persistente (sin límite de 5MB)
+    <!-- VIEW 1: DASHBOARD -->
+    <section id="view-dashboard" class="view-container space-y-8 animate-fadeIn">
+      
+      <!-- Hero / Quick Study Banner -->
+      <div class="relative overflow-hidden bg-gradient-to-br from-indigo-950/60 via-slate-900 to-slate-900 border border-indigo-500/30 rounded-3xl p-6 md:p-8 shadow-2xl">
+        <div class="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+          <div class="space-y-2 max-w-xl">
+            <span class="text-xs font-extrabold uppercase tracking-widest text-indigo-400">
+              Objetivo de Hoy • Algoritmo SM-2
             </span>
-          </div>
-        </div>
-
-        <div id="library-classes-grid" class="classes-grid">
-          <!-- Class cards rendered dynamically from database -->
-        </div>
-      </div>
-
-      <!-- VIEW 2: VISOR PDF ACTIVO -->
-      <div id="pdf-workspace" class="pdf-workspace hidden">
-        <!-- Toolbar -->
-        <div class="pdf-toolbar">
-          <div class="pdf-toolbar-group">
-            <button id="btn-back-to-library" class="btn btn-secondary btn-sm" title="Volver a la lista de clases">
-              ◀ Biblioteca
-            </button>
-            <span id="pdf-current-subject-tag" class="badge badge-indigo">General</span>
-            <span id="pdf-current-title" class="pdf-doc-title">Documento.pdf</span>
+            <h2 class="text-2xl md:text-3xl font-extrabold text-slate-100">
+              Mantén tu curva de retención al máximo
+            </h2>
+            <p class="text-sm text-slate-300 leading-relaxed">
+              El algoritmo ha identificado <strong id="dash-due-count" class="text-indigo-300 font-bold">0</strong> preguntas que vencen hoy para evitar el olvido biológico.
+            </p>
           </div>
 
-          <div class="pdf-toolbar-group">
-            <button id="pdf-prev-page" class="icon-btn" title="Página anterior">◀</button>
-            <div class="pdf-page-indicator">
-              <span>Pág.</span>
-              <input type="number" id="pdf-page-num" class="pdf-page-input" value="1" min="1">
-              <span>de <span id="pdf-page-count">1</span></span>
-            </div>
-            <button id="pdf-next-page" class="icon-btn" title="Página siguiente">▶</button>
-          </div>
-
-          <!-- Highlighter Color Selection -->
-          <div class="pdf-toolbar-group">
-            <div class="highlighter-picker">
-              <span class="highlighter-label">🖍️ Destacador:</span>
-              <button class="highlighter-color-btn active" style="background-color: #fef08a;" data-color="#fef08a" data-name="amarillo" title="Amarillo pastel"></button>
-              <button class="highlighter-color-btn" style="background-color: #a7f3d0;" data-color="#a7f3d0" data-name="verde" title="Verde lima"></button>
-              <button class="highlighter-color-btn" style="background-color: #bae6fd;" data-color="#bae6fd" data-name="celeste" title="Celeste"></button>
-              <button class="highlighter-color-btn" style="background-color: #fbcfe8;" data-color="#fbcfe8" data-name="rosa" title="Rosa"></button>
-            </div>
-          </div>
-
-          <!-- Zoom & Tools -->
-          <div class="pdf-toolbar-group">
-            <button id="pdf-zoom-out" class="icon-btn" title="Alejar zoom">🔍−</button>
-            <button id="pdf-zoom-fit" class="icon-btn" title="Ajustar al ancho">↔</button>
-            <button id="pdf-zoom-in" class="icon-btn" title="Acercar zoom">🔍+</button>
-            <button id="btn-send-page-to-tutor" class="btn btn-secondary btn-sm" title="Vincular texto de esta página al Tutor IA">
-              🤖 Vincular al Tutor
+          <div class="shrink-0 flex flex-col sm:flex-row gap-3">
+            <button id="btn-quick-start" class="px-6 py-3.5 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-extrabold text-sm rounded-2xl shadow-xl shadow-indigo-600/30 transition transform hover:-translate-y-0.5 active:translate-y-0">
+              🚀 Continuar Estudio
             </button>
           </div>
         </div>
 
-        <!-- Main Stage -->
-        <div class="pdf-stage-layout">
-          <div class="pdf-viewport-scroller" id="pdf-scroller">
-            <div id="pdf-page-container" class="pdf-page-container">
-              <canvas id="pdf-canvas"></canvas>
-              <div id="pdf-text-layer" class="textLayer"></div>
-              <div id="pdf-highlights-layer" class="pdf-highlights-layer"></div>
-            </div>
+        <!-- Daily Goal Progress Sub-bar -->
+        <div class="relative z-10 mt-6 pt-6 border-t border-slate-800/80">
+          <div class="flex items-center justify-between text-xs font-semibold text-slate-400 mb-2">
+            <span>Meta Diaria</span>
+            <span id="dash-goal-text">0 / 20 tarjetas repasadas</span>
           </div>
-
-          <!-- Highlights Sidebar -->
-          <aside class="pdf-highlights-sidebar">
-            <div class="sidebar-title-bar">
-              <h4>🖍️ Destacados (<span id="pdf-highlights-count">0</span>)</h4>
-            </div>
-            <div id="pdf-highlights-container" class="highlights-scroll-list">
-              <!-- Highlights list rendered dynamically -->
-            </div>
-          </aside>
-        </div>
-      </div>
-
-      <!-- Floating Text Selection Tooltip Menu -->
-      <div id="pdf-selection-popup" class="pdf-selection-popup">
-        <button id="btn-action-highlight" class="popup-action-btn">🖍️ Destacar</button>
-        <button id="btn-action-ask-tutor" class="popup-action-btn">🤖 Preguntar a Tutor</button>
-        <button id="btn-action-make-flashcard" class="popup-action-btn">🗂️ A Flashcard</button>
-        <button id="btn-action-make-quiz" class="popup-action-btn">📝 A Quiz</button>
-      </div>
-    </section>
-
-    <!-- TAB 3: TUTOR IA (GOOGLE GEMINI) -->
-    <section id="tab-tutor" class="tab-pane">
-      <div class="view-header">
-        <div class="view-title-group">
-          <h2>🤖 Tutor Académico IA</h2>
-          <p>Conectado a Google Gemini. Resuelve dudas, pide analogías, casos prácticos y resúmenes de tus clases.</p>
-        </div>
-        <div style="display: flex; align-items: center; gap: 0.75rem;">
-          <span id="tutor-api-status-pill" class="status-pill status-pill-active">Conectando...</span>
-          <button id="btn-clear-tutor-chat" class="btn btn-secondary btn-sm" title="Reiniciar chat">🔄 Nuevo Chat</button>
-        </div>
-      </div>
-
-      <div class="tutor-layout">
-        <!-- Top bar & context indicators -->
-        <div class="tutor-top-bar">
-          <div class="tutor-title-info">
-            <span>✨</span>
-            <h3>Conversación de Estudio</h3>
+          <div class="w-full bg-slate-800/80 h-2 rounded-full overflow-hidden border border-slate-700/50">
+            <div id="dash-goal-fill" class="bg-gradient-to-r from-indigo-500 to-emerald-400 h-full rounded-full transition-all duration-500" style="width: 0%"></div>
           </div>
-          <span class="text-xs" style="color: var(--text-muted);">Soporta Markdown, voz y preguntas socráticas</span>
         </div>
+      </div>
 
-        <!-- Attached context banner -->
-        <div id="tutor-context-badge" class="tutor-context-banner hidden">
+      <!-- Asignaturas / Carpetas Section -->
+      <div class="space-y-4">
+        <div class="flex items-center justify-between">
           <div>
-            <span class="context-tag">📎 Material Vinculado:</span>
-            <span id="tutor-context-preview" class="context-preview-text"></span>
+            <h3 class="text-lg font-bold text-slate-100 flex items-center gap-2">
+              <span>📚</span> Asignaturas & Módulos
+            </h3>
+            <p class="text-xs text-slate-400">Organiza tus asignaturas y repasa de forma focalizada.</p>
           </div>
-          <button id="btn-clear-tutor-context" class="btn-text-action text-xs" style="color: var(--danger);">✕ Desvincular</button>
+          <button id="btn-new-folder" class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-bold text-slate-200 transition flex items-center gap-1.5 shadow-sm">
+            <span>+</span>
+            <span>Nueva Asignatura</span>
+          </button>
         </div>
 
-        <!-- Chat messages scroller -->
-        <div id="tutor-messages-container" class="tutor-messages-scroller">
-          <!-- Messages rendered dynamically -->
+        <!-- Grid of Folders -->
+        <div id="dash-folders-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <!-- Rendered dynamically by app.js -->
         </div>
+      </div>
 
-        <!-- Quick prompt chips -->
-        <div class="tutor-prompt-chips-bar">
-          <button class="tutor-chip" data-prompt="Explícame este concepto con el método Feynman, en lenguaje muy claro y comprensible: ">💡 Método Feynman (Sencillo)</button>
-          <button class="tutor-chip" data-prompt="Dame un ejemplo práctico o caso clínico de la vida real sobre: ">🩺 Caso Práctico</button>
-          <button class="tutor-chip" data-prompt="Hazme una pregunta sorpresa de nivel intermedio para evaluar si domino este tema: ">🎯 Evalúame</button>
-          <button class="tutor-chip" data-prompt="Resume los 5 conceptos indispensables y de mayor rendimiento sobre: ">📋 Top 5 Puntos Clave</button>
-          <button class="tutor-chip" data-prompt="¿Qué regla mnemotécnica puedo usar para no olvidar nunca esto?: ">🧠 Regla Mnemotécnica</button>
-        </div>
+    </section>
 
-        <!-- Input Form -->
-        <div class="tutor-input-area">
-          <form id="tutor-form" class="tutor-form-wrapper">
-            <textarea id="tutor-input" class="tutor-textarea" placeholder="Escribe tu duda, pregunta o pega un tema para estudiar... (Enter para enviar, Shift+Enter para nueva línea)" rows="1"></textarea>
-            <button type="submit" class="btn btn-primary tutor-send-btn">
-              Enviar ➔
-            </button>
-          </form>
-        </div>
+    <!-- VIEW 2: QUIZ INTERACTIVO -->
+    <section id="view-quiz" class="view-container hidden animate-fadeIn">
+      <div id="quiz-engine-mount">
+        <!-- Rendered by quiz.js -->
       </div>
     </section>
 
-    <!-- TAB 4: FLASHCARDS (CREADOR Y ESTUDIO SRS) -->
-    <section id="tab-flashcards" class="tab-pane">
-      <!-- Dashboard View -->
-      <div id="flashcards-dashboard-view">
-        <div class="view-header">
-          <div class="view-title-group">
-            <h2>🗂️ Flashcards & Repetición Espaciada</h2>
-            <p>Repasa activamente la materia con tarjetas interactivas y algoritmo de autoevaluación.</p>
-          </div>
-          <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
-            <button id="btn-open-ai-flashcards" class="btn btn-primary">
-              ✨ Generar con Gemini IA
-            </button>
-            <button id="btn-open-manual-flashcard" class="btn btn-secondary">
-              + Crear Tarjeta Manual
-            </button>
-          </div>
-        </div>
-
-        <div id="flashcard-decks-grid" class="cards-grid">
-          <!-- Decks rendered dynamically -->
-        </div>
-      </div>
-
-      <!-- Interactive Study Session View -->
-      <div id="flashcards-study-view" class="hidden">
-        <div class="study-container">
-          <div class="study-top-bar">
-            <div>
-              <button id="btn-exit-study" class="btn btn-secondary btn-sm">◀ Salir de sesión</button>
-            </div>
-            <h3 id="study-deck-name" style="font-size: 1.15rem; font-weight: 700;">Nombre del Mazo</h3>
-            <div class="study-progress-info">
-              <span id="study-progress-counter" class="study-progress-counter">Tarjeta 1 de 10</span>
-            </div>
-          </div>
-
-          <div class="progress-bar" style="height: 6px;">
-            <div id="study-progress-bar-fill" class="progress-fill" style="width: 10%;"></div>
-          </div>
-
-          <!-- 3D Flip Card -->
-          <div id="study-flashcard" class="flashcard-3d-wrapper">
-            <div class="flashcard-inner">
-              <!-- Front -->
-              <div class="flashcard-face flashcard-face-front">
-                <div class="card-face-tag">Pregunta / Anverso</div>
-                <div id="card-front-text" class="card-face-content">¿Pregunta de la flashcard?</div>
-                <div id="card-hint-container" class="card-hint-container hidden">
-                  <span class="card-hint-badge">💡 Pista: <span id="card-hint-text">...</span></span>
-                </div>
-                <div class="card-face-footer">
-                  <span>Haz clic en la tarjeta o pulsa <strong>Espacio</strong> para voltear</span>
-                </div>
-              </div>
-
-              <!-- Back -->
-              <div class="flashcard-face flashcard-face-back">
-                <div class="card-face-tag">Respuesta / Reverso</div>
-                <div id="card-back-text" class="card-face-content">Respuesta detallada y pedagógica.</div>
-                <div class="card-face-footer">
-                  <span>Evalúa tu nivel de dominio abajo con las teclas [1], [2] o [3]</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Rating Controls Bar -->
-          <div class="study-controls-bar">
-            <!-- State 1: Prompt to Flip -->
-            <div id="study-flip-prompt" class="w-full">
-              <button id="btn-flip-card" class="prompt-flip-btn">
-                🔄 Mostrar Respuesta (Espacio o Enter)
-              </button>
-            </div>
-
-            <!-- State 2: Spaced Repetition Rating Buttons -->
-            <div id="study-rating-buttons" class="rating-buttons-group hidden">
-              <button id="btn-rate-hard" class="rating-btn rating-hard" title="Atajo: Tecla 1">
-                <span>🔴 Difícil</span>
-                <span class="shortcut-key">Repetir pronto [1]</span>
-              </button>
-              <button id="btn-rate-medium" class="rating-btn rating-medium" title="Atajo: Tecla 2">
-                <span>🟡 Regular</span>
-                <span class="shortcut-key">Revisar [2]</span>
-              </button>
-              <button id="btn-rate-easy" class="rating-btn rating-easy" title="Atajo: Tecla 3">
-                <span>🟢 ¡Dominada!</span>
-                <span class="shortcut-key">La sé [3]</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Study Session Finished Summary -->
-      <div id="study-summary-view" class="hidden">
-        <div class="summary-card">
-          <div class="summary-icon">🎉</div>
-          <h2>¡Sesión de Estudio Completada!</h2>
-          <p style="color: var(--text-secondary);">Has repasado todas las tarjetas del mazo programado.</p>
-
-          <div class="summary-stats-grid">
-            <div class="summary-stat-box">
-              <div id="summary-total-cards" class="summary-stat-num" style="color: var(--primary);">0</div>
-              <div class="summary-stat-label">Total Repasadas</div>
-            </div>
-            <div class="summary-stat-box">
-              <div id="summary-mastered" class="summary-stat-num" style="color: var(--success);">0</div>
-              <div class="summary-stat-label">Dominadas</div>
-            </div>
-            <div class="summary-stat-box">
-              <div id="summary-hard" class="summary-stat-num" style="color: var(--danger);">0</div>
-              <div class="summary-stat-label">Por Reforzar</div>
-            </div>
-          </div>
-
-          <div class="empty-actions">
-            <button id="btn-restart-study" class="btn btn-primary">🔄 Repasar Nuevamente</button>
-            <button onclick="window.flashcardsModule.exitStudyMode()" class="btn btn-secondary">Volver al Menú</button>
-          </div>
-        </div>
+    <!-- VIEW 3: FLASHCARDS 3D -->
+    <section id="view-study" class="view-container hidden animate-fadeIn">
+      <div id="study-engine-mount">
+        <!-- Rendered by study.js -->
       </div>
     </section>
 
-    <!-- TAB 5: PREGUNTAS DE SELECCIÓN MÚLTIPLE (QUIZ) -->
-    <section id="tab-quiz" class="tab-pane">
-      <!-- Dashboard View -->
-      <div id="quiz-dashboard-view">
-        <div class="view-header">
-          <div class="view-title-group">
-            <h2>📝 Creador de Quizzes & Selección Múltiple</h2>
-            <p>Evalúa tus conocimientos con simuladores de examen de 4 opciones (A, B, C, D) con explicación detallada.</p>
-          </div>
-          <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
-            <button id="btn-open-ai-quiz" class="btn btn-primary">
-              ✨ Generar Quiz con Gemini IA
-            </button>
-            <button id="btn-open-manual-quiz" class="btn btn-secondary">
-              + Crear Pregunta Manual
-            </button>
-          </div>
-        </div>
-
-        <div id="quiz-collections-grid" class="cards-grid">
-          <!-- Quiz collections rendered dynamically -->
-        </div>
-      </div>
-
-      <!-- Quiz Play Mode View -->
-      <div id="quiz-play-view" class="hidden">
-        <div class="quiz-play-container">
-          <div class="study-top-bar">
-            <button id="btn-exit-quiz" class="btn btn-secondary btn-sm">◀ Abandonar examen</button>
-            <h3 id="quiz-play-title" style="font-size: 1.15rem; font-weight: 700;">Título del Cuestionario</h3>
-            <span id="quiz-progress-text" style="font-weight: 700; font-size: 0.9rem;">Pregunta 1 de 5</span>
-          </div>
-
-          <div class="progress-bar" style="height: 6px;">
-            <div id="quiz-progress-fill" class="progress-fill" style="width: 20%;"></div>
-          </div>
-
-          <div class="quiz-card-main">
-            <h3 id="quiz-question-statement" class="quiz-question-statement">Enunciado de la pregunta...</h3>
-
-            <!-- 4 Options -->
-            <div id="quiz-options-container" class="quiz-options-list">
-              <!-- Rendered dynamically -->
-            </div>
-
-            <!-- Explanation & Feedback (revealed after clicking an option) -->
-            <div id="quiz-explanation-box" class="quiz-explanation-box hidden">
-              <div class="explanation-header">
-                <span id="quiz-feedback-tag" class="badge badge-green">¡Correcto!</span>
-                <span style="font-weight: 700; font-size: 0.9rem;">Retroalimentación Académica:</span>
-              </div>
-              <p id="quiz-explanation-text" class="explanation-text"></p>
-            </div>
-
-            <!-- Next button -->
-            <div style="margin-top: 1.5rem; display: flex; justify-content: flex-end;">
-              <button id="btn-quiz-next" class="btn btn-primary hidden">
-                Siguiente Pregunta ➔
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Quiz Final Results View -->
-      <div id="quiz-results-view" class="hidden">
-        <div class="summary-card" style="max-width: 680px;">
-          <div class="summary-icon">🎯</div>
-          <h2>Resultados de la Evaluación</h2>
-          <div id="quiz-results-badge" class="badge badge-green" style="font-size: 0.9rem; margin: 0.75rem 0;">¡Excelente!</div>
-          <p id="quiz-results-score" style="font-size: 2.5rem; font-weight: 800; color: var(--primary); margin: 0.5rem 0;">4 / 5</p>
-          <p id="quiz-results-pct" style="color: var(--text-secondary); font-size: 1.1rem; margin-bottom: 1.5rem;">80% de acierto</p>
-
-          <div class="empty-actions" style="margin-bottom: 2rem;">
-            <button id="btn-quiz-to-flashcards" class="btn btn-primary hidden">
-              🗂️ Convertir Preguntas Falladas en Flashcards
-            </button>
-            <button id="btn-restart-quiz" class="btn btn-secondary">🔄 Reintentar Examen</button>
-            <button onclick="window.quizModule.exitQuizMode()" class="btn btn-secondary">Salir al Menú</button>
-          </div>
-
-          <!-- Questions Review List -->
-          <div style="text-align: left;">
-            <h4 style="margin-bottom: 0.75rem;">Revisión de respuestas:</h4>
-            <div id="quiz-review-breakdown" class="quiz-review-list"></div>
-          </div>
-        </div>
+    <!-- VIEW 4: GENERADOR CON GEMINI API -->
+    <section id="view-generator" class="view-container hidden animate-fadeIn">
+      <div id="generator-mount">
+        <!-- Rendered by generator.js -->
       </div>
     </section>
 
   </main>
 
-  <!-- Floating Quick Tutor Button -->
-  <button id="floating-tutor-btn" class="floating-tutor-btn" title="Abrir Tutor IA">
-    <span>🤖</span>
-    <span>Tutor IA</span>
-  </button>
-
-  <!-- =========================================
+  <!-- =========================================================================
        MODALS
-       ========================================= -->
+       ========================================================================= -->
 
-  <!-- Modal: Agregar Evento Calendario -->
-  <div id="modal-event" class="modal-overlay">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h3 class="modal-title">📅 Agendar Sesión o Examen</h3>
-        <button class="modal-close-btn">&times;</button>
+  <!-- Modal: Nueva Asignatura / Carpeta -->
+  <div id="modal-new-folder" class="modal-backdrop fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 hidden">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 shadow-2xl animate-fadeIn">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="text-base font-bold text-slate-100">Crear Nueva Asignatura</h3>
+        <button class="btn-close-modal text-slate-400 hover:text-white">&times;</button>
       </div>
-      <form id="form-add-event">
-        <div class="modal-body">
-          <div class="form-group">
-            <label for="event-title">Título o Asignatura *</label>
-            <input type="text" id="event-title" class="form-input" placeholder="Ej: Examen Final de Bioquímica" required>
-          </div>
-          <div class="form-row">
-            <div class="form-group">
-              <label for="event-date">Fecha *</label>
-              <input type="date" id="event-date" class="form-input" required>
-            </div>
-            <div class="form-group">
-              <label for="event-time">Hora *</label>
-              <input type="time" id="event-time" class="form-input" value="09:00" required>
-            </div>
-          </div>
-          <div class="form-row">
-            <div class="form-group">
-              <label for="event-category">Tipo de Evento</label>
-              <select id="event-category" class="form-select">
-                <option value="examen">🎯 Examen / Certamen</option>
-                <option value="estudio">📚 Sesión de Estudio</option>
-                <option value="repaso">🔄 Repaso de Flashcards</option>
-                <option value="entrega">📌 Entrega / Trabajo</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label for="event-reminder">Notificarme con anticipación</label>
-              <select id="event-reminder" class="form-select">
-                <option value="15">15 minutos antes</option>
-                <option value="30" selected>30 minutos antes</option>
-                <option value="60">1 hora antes</option>
-                <option value="120">2 horas antes</option>
-                <option value="1440">1 día antes</option>
-              </select>
-            </div>
-          </div>
-          <div class="form-group">
-            <label for="event-notes">Notas o metas para esta sesión</label>
-            <textarea id="event-notes" class="form-textarea" rows="2" placeholder="Ej: Repasar flashcards de insuficiencia cardíaca y leer páginas 40 a 60."></textarea>
-          </div>
+      <form id="form-new-folder" class="space-y-4">
+        <div>
+          <label class="block text-xs font-bold text-slate-300 uppercase mb-1.5">Nombre de la Asignatura *</label>
+          <input type="text" id="input-folder-title" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-slate-100 focus:outline-none focus:border-indigo-500" placeholder="Ej: Farmacología Clínica" required>
         </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-secondary modal-close-btn">Cancelar</button>
-          <button type="submit" class="btn btn-primary">Guardar en Calendario</button>
+        <div>
+          <label class="block text-xs font-bold text-slate-300 uppercase mb-1.5">Descripción breve</label>
+          <input type="text" id="input-folder-desc" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-slate-100 focus:outline-none focus:border-indigo-500" placeholder="Mecanismos de acción, interacciones...">
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-300 uppercase mb-1.5">Emoji / Ícono</label>
+          <input type="text" id="input-folder-icon" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-slate-100 focus:outline-none focus:border-indigo-500" value="💊">
+        </div>
+        <div class="flex justify-end gap-2 pt-2">
+          <button type="button" class="btn-close-modal px-4 py-2 rounded-xl text-xs font-bold text-slate-400 hover:text-white">Cancelar</button>
+          <button type="submit" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold shadow-md">Guardar</button>
         </div>
       </form>
     </div>
   </div>
 
-  <!-- Modal: Generar Flashcards con IA -->
-  <div id="modal-ai-flashcards" class="modal-overlay">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h3 class="modal-title">✨ Generar Flashcards con Gemini IA</h3>
-        <button class="modal-close-btn">&times;</button>
+  <!-- Modal: Configuración & Gemini API Key -->
+  <div id="modal-settings" class="modal-backdrop fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 hidden">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full p-6 shadow-2xl animate-fadeIn">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="text-base font-bold text-slate-100 flex items-center gap-2">
+          <span>⚙️</span> Configuración & Conexión Gemini API
+        </h3>
+        <button class="btn-close-modal text-slate-400 hover:text-white">&times;</button>
       </div>
-      <form id="form-ai-flashcards">
-        <div class="modal-body">
-          <div class="form-group">
-            <label for="ai-fc-topic">Tema o Materia a Estudiar *</label>
-            <input type="text" id="ai-fc-topic" class="form-input" placeholder="Ej: Síndrome Coronario Agudo, Fotosíntesis, Derecho Procesal Penal..." required>
-          </div>
-          <div class="form-group">
-            <label for="ai-fc-context">Texto o Apuntes de Referencia (Opcional)</label>
-            <textarea id="ai-fc-context" class="form-textarea" rows="4" placeholder="Pega aquí párrafos de tu clase o apuntes para que Gemini genere flashcards exactas sobre ese texto..."></textarea>
-            <div class="form-helper">Si estás leyendo un PDF, puedes seleccionar texto y elegir 'A Flashcard' para que se copie automáticamente aquí.</div>
-          </div>
-          <div class="form-row">
-            <div class="form-group">
-              <label for="ai-fc-count">Cantidad de Tarjetas</label>
-              <select id="ai-fc-count" class="form-select">
-                <option value="3">3 tarjetas rápidas</option>
-                <option value="5" selected>5 tarjetas clave</option>
-                <option value="8">8 tarjetas</option>
-                <option value="12">12 tarjetas (Profundo)</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label for="ai-fc-difficulty">Nivel de Dificultad</label>
-              <select id="ai-fc-difficulty" class="form-select">
-                <option value="básico">Básico / Introductorio</option>
-                <option value="intermedio" selected>Intermedio / Aplicación</option>
-                <option value="avanzado">Avanzado / Casos complejos</option>
-              </select>
-            </div>
-          </div>
+      <form id="form-settings" class="space-y-4">
+        <div>
+          <label class="block text-xs font-bold text-slate-300 uppercase mb-1.5">Google Gemini API Key</label>
+          <input type="password" id="input-gemini-key" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-slate-100 focus:outline-none focus:border-indigo-500" placeholder="AIzaSy...">
+          <p class="text-[11px] text-slate-500 mt-1.5">
+            Obtén tu clave gratis en <a href="https://aistudio.google.com/app/apikey" target="_blank" class="text-indigo-400 underline">Google AI Studio</a>. Se almacena localmente en IndexedDB.
+          </p>
         </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-secondary modal-close-btn">Cancelar</button>
-          <button type="submit" id="btn-submit-ai-fc" class="btn btn-primary">✨ Generar con Gemini</button>
+
+        <div>
+          <label class="block text-xs font-bold text-slate-300 uppercase mb-1.5">Modelo de Gemini</label>
+          <select id="input-gemini-model" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-slate-100 focus:outline-none focus:border-indigo-500">
+            <option value="gemini-2.5-pro">👑 Gemini 2.5 Pro (Máximo Razonamiento Pedagógico)</option>
+            <option value="gemini-1.5-pro">🧠 Gemini 1.5 Pro (Contexto Extenso de 2M tokens)</option>
+            <option value="gemini-2.5-flash" selected>⚡ Gemini 2.5 Flash (Ultra Rápido - Recomendado)</option>
+            <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
+          </select>
+        </div>
+
+        <div class="p-3 bg-slate-800/60 rounded-xl border border-slate-700/60 text-xs text-slate-400">
+          💡 La app utiliza la característica de <strong>Structured Outputs (JSON Schema)</strong> para garantizar que el banco de preguntas generado no tenga errores de sintaxis y se inserte directo en la base de datos.
+        </div>
+
+        <div class="flex justify-end gap-2 pt-2">
+          <button type="button" class="btn-close-modal px-4 py-2 rounded-xl text-xs font-bold text-slate-400 hover:text-white">Cerrar</button>
+          <button type="submit" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold shadow-md">Guardar Configuración</button>
         </div>
       </form>
     </div>
   </div>
 
-  <!-- Modal: Crear Flashcard Manual -->
-  <div id="modal-manual-flashcard" class="modal-overlay">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h3 class="modal-title">+ Crear Tarjeta Manual</h3>
-        <button class="modal-close-btn">&times;</button>
-      </div>
-      <form id="form-manual-flashcard">
-        <div class="modal-body">
-          <div class="form-group">
-            <label for="manual-fc-deck-select">Mazo Destino</label>
-            <select id="manual-fc-deck-select" class="form-select"></select>
-          </div>
-          <div class="form-group">
-            <label for="manual-fc-front">Pregunta o Concepto (Anverso) *</label>
-            <textarea id="manual-fc-front" class="form-textarea" rows="3" placeholder="¿Cuál es la diferencia entre...?" required></textarea>
-          </div>
-          <div class="form-group">
-            <label for="manual-fc-back">Respuesta o Explicación (Reverso) *</label>
-            <textarea id="manual-fc-back" class="form-textarea" rows="3" placeholder="La respuesta correcta y concisa..." required></textarea>
-          </div>
-          <div class="form-group">
-            <label for="manual-fc-hint">Pista Mnemotécnica (Opcional)</label>
-            <input type="text" id="manual-fc-hint" class="form-input" placeholder="Recuerda la regla de las 4T...">
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-secondary modal-close-btn">Cancelar</button>
-          <button type="submit" class="btn btn-primary">Guardar Tarjeta</button>
-        </div>
-      </form>
-    </div>
-  </div>
-
-  <!-- Modal: Generar Quiz con IA -->
-  <div id="modal-ai-quiz" class="modal-overlay">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h3 class="modal-title">✨ Generar Examen de Selección Múltiple con IA</h3>
-        <button class="modal-close-btn">&times;</button>
-      </div>
-      <form id="form-ai-quiz">
-        <div class="modal-body">
-          <div class="form-group">
-            <label for="ai-quiz-topic">Materia o Tema a Evaluar *</label>
-            <input type="text" id="ai-quiz-topic" class="form-input" placeholder="Ej: Farmacología Antihipertensiva, Historia Universal, Cálculo Integral..." required>
-          </div>
-          <div class="form-group">
-            <label for="ai-quiz-context">Texto de Referencia / Apuntes (Opcional)</label>
-            <textarea id="ai-quiz-context" class="form-textarea" rows="4" placeholder="Pega aquí fragmentos de tu PDF o libro para que las preguntas se extraigan de este texto..."></textarea>
-          </div>
-          <div class="form-row">
-            <div class="form-group">
-              <label for="ai-quiz-count">Número de Preguntas</label>
-              <select id="ai-quiz-count" class="form-select">
-                <option value="3">3 preguntas rápidas</option>
-                <option value="5" selected>5 preguntas (Recomendado)</option>
-                <option value="8">8 preguntas</option>
-                <option value="10">10 preguntas</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label for="ai-quiz-difficulty">Dificultad</label>
-              <select id="ai-quiz-difficulty" class="form-select">
-                <option value="básico">Básico</option>
-                <option value="intermedio" selected>Intermedio</option>
-                <option value="avanzado">Avanzado (Casos clínicos/problemas)</option>
-              </select>
-            </div>
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-secondary modal-close-btn">Cancelar</button>
-          <button type="submit" id="btn-submit-ai-quiz" class="btn btn-primary">✨ Generar Preguntas con Gemini</button>
-        </div>
-      </form>
-    </div>
-  </div>
-
-  <!-- Modal: Crear Pregunta Manual -->
-  <div id="modal-manual-quiz" class="modal-overlay">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h3 class="modal-title">+ Crear Pregunta de Opción Múltiple</h3>
-        <button class="modal-close-btn">&times;</button>
-      </div>
-      <form id="form-manual-quiz">
-        <div class="modal-body">
-          <div class="form-group">
-            <label for="manual-quiz-select">Cuestionario</label>
-            <select id="manual-quiz-select" class="form-select"></select>
-          </div>
-          <div class="form-group">
-            <label for="manual-quiz-question">Enunciado de la Pregunta *</label>
-            <textarea id="manual-quiz-question" class="form-textarea" rows="2" placeholder="¿Cuál es la primera línea terapéutica en...?" required></textarea>
-          </div>
-          <div class="form-group">
-            <label>Opciones y Marca la Correcta (A, B, C o D) *</label>
-            <div style="display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.35rem;">
-              <div style="display: flex; align-items: center; gap: 0.5rem;">
-                <input type="radio" name="manual-correct" value="0" checked id="radio-opt-0">
-                <input type="text" id="manual-opt-0" class="form-input" placeholder="Opción A" required>
-              </div>
-              <div style="display: flex; align-items: center; gap: 0.5rem;">
-                <input type="radio" name="manual-correct" value="1" id="radio-opt-1">
-                <input type="text" id="manual-opt-1" class="form-input" placeholder="Opción B" required>
-              </div>
-              <div style="display: flex; align-items: center; gap: 0.5rem;">
-                <input type="radio" name="manual-correct" value="2" id="radio-opt-2">
-                <input type="text" id="manual-opt-2" class="form-input" placeholder="Opción C" required>
-              </div>
-              <div style="display: flex; align-items: center; gap: 0.5rem;">
-                <input type="radio" name="manual-correct" value="3" id="radio-opt-3">
-                <input type="text" id="manual-opt-3" class="form-input" placeholder="Opción D" required>
-              </div>
-            </div>
-          </div>
-          <div class="form-group">
-            <label for="manual-quiz-explanation">Explicación Académica de la Respuesta</label>
-            <textarea id="manual-quiz-explanation" class="form-textarea" rows="2" placeholder="La opción A es correcta porque..."></textarea>
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-secondary modal-close-btn">Cancelar</button>
-          <button type="submit" class="btn btn-primary">Guardar Pregunta</button>
-        </div>
-      </form>
-    </div>
-  </div>
-
-  <!-- Modal: Configuración y Gemini API -->
-  <div id="modal-settings" class="modal-overlay">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h3 class="modal-title">⚙️ Configuración & Conexión Gemini</h3>
-        <button class="modal-close-btn">&times;</button>
-      </div>
-      <form id="form-settings">
-        <div class="modal-body">
-          <div class="form-group">
-            <label for="settings-api-key">Google Gemini API Key</label>
-            <div style="display: flex; gap: 0.5rem;">
-              <input type="password" id="settings-api-key" class="form-input" placeholder="AIzaSy...">
-              <button type="button" id="btn-test-api-key" class="btn btn-secondary btn-sm" style="white-space: nowrap;">Probar Conexión</button>
-            </div>
-            <div id="api-key-test-status" class="form-helper" style="margin-top: 0.4rem;"></div>
-            <div class="form-helper">
-              ¿No tienes una clave? Puedes obtenerla 100% gratis en <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color: var(--primary);">Google AI Studio</a>. La clave se almacena exclusivamente en tu navegador (localStorage).
-            </div>
-          </div>
-
-          <div class="form-row">
-            <div class="form-group">
-              <label for="settings-model">Modelo de Gemini</label>
-              <select id="settings-model" class="form-select">
-                <option value="gemini-2.5-pro">👑 Gemini 2.5 Pro (Máximo Razonamiento Académico & Profundidad)</option>
-                <option value="gemini-1.5-pro">🧠 Gemini 1.5 Pro (Razonamiento Complejo & 2M Tokens)</option>
-                <option value="gemini-2.5-flash" selected>⚡ Gemini 2.5 Flash (Ultra Rápido y Versátil - Recomendado)</option>
-                <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
-                <option value="gemini-1.5-flash">Gemini 1.5 Flash</option>
-              </select>
-              <div class="form-helper">
-                Todos los modelos funcionan con la misma clave de Google AI Studio. <strong>Gemini 2.5 Pro</strong> es ideal para análisis conceptual exhaustivo y preguntas complejas.
-              </div>
-            </div>
-            <div class="form-group" style="display: flex; flex-direction: column; justify-content: center;">
-              <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; margin-top: 1rem;">
-                <input type="checkbox" id="settings-sound" checked>
-                <span>Sonidos y alertas chimes</span>
-              </label>
-            </div>
-          </div>
-
-          <hr style="border: 0; border-top: 1px solid var(--border-color); margin: 1.5rem 0;">
-
-          <div>
-            <h4 style="font-size: 0.95rem; margin-bottom: 0.5rem;">Copia de Seguridad de tus Datos</h4>
-            <p style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.75rem;">
-              Exporta o restaura todos tus eventos de calendario, apuntes, flashcards y cuestionarios en un archivo JSON.
-            </p>
-            <div style="display: flex; gap: 0.5rem;">
-              <button type="button" id="btn-export-backup" class="btn btn-secondary btn-sm">💾 Exportar Respaldo JSON</button>
-              <button type="button" id="btn-import-backup" class="btn btn-secondary btn-sm">📥 Restaurar Respaldo</button>
-              <input type="file" id="input-import-backup" accept=".json" class="hidden">
-            </div>
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-secondary modal-close-btn">Cerrar</button>
-          <button type="submit" class="btn btn-primary">Guardar Configuración</button>
-        </div>
-      </form>
-    </div>
-  </div>
-
-  <!-- Toast Notification -->
-  <div id="app-toast" class="toast-notification"></div>
-
-  <!-- External libraries: PDF.js, Marked.js, Confetti -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
-
-  <!-- App Application Scripts -->
-  <script src="js/db.js"></script>
-  <script src="js/storage.js"></script>
-  <script src="js/gemini.js"></script>
-  <script src="js/calendar.js"></script>
-  <script src="js/pdf-viewer.js"></script>
-  <script src="js/tutor.js"></script>
-  <script src="js/flashcards.js"></script>
-  <script src="js/quiz.js"></script>
-  <script src="js/app.js"></script>
+  <!-- Main ES Module Script -->
+  <script type="module" src="js/app.js"></script>
 </body>
 </html>

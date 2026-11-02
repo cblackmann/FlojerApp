@@ -1,67 +1,109 @@
-# FlojerApp - Aplicación de Estudio Inteligente
+# FlojerApp - Progressive Web App (PWA) de Estudio Activo & Retención Mnemotécnica
 
-Una plataforma moderna, integral y rápida para estudiantes, diseñada para maximizar el rendimiento académico mediante técnicas de estudio activo, repetición espaciada y el poder de **Google Gemini**.
-
----
-
-## 🚀 Funcionalidades Principales
-
-### 1. 📅 Calendario con Notificaciones
-- **Vista mensual interactiva:** Visualiza tus sesiones de estudio, fechas de certámenes, entregas y repasos diarios.
-- **Categorización por colores:** Exámenes (rojo), Sesiones de estudio (azul), Repasos SRS (verde), y Entregas (amarillo).
-- **Notificaciones de escritorio y sonoras:** Integración con la *Web Notifications API* y alertas Web Audio para avisarte con la anticipación que elijas (15 min, 30 min, 1 hora, 1 día antes).
-
-### 2. 📖 Base de Datos de Clases & Visor de PDF con Destacador
-- **Base de Datos Local (IndexedDB):** Almacena tus clases y presentaciones en PDF directamente en el navegador con persistencia total y sin límite de tamaño (soporta cientos de megabytes).
-- **Biblioteca organizada:** Clasificación por asignaturas, buscador instantáneo, tamaño de archivo, fecha y progreso de lectura (guarda la última página leída).
-- **Renderizado de alto rendimiento:** Basado en PDF.js con soporte HiDPI para lectura nítida de presentaciones, libros y apuntes.
-- **Destacador con 4 colores:** Resalta texto con paleta pastel (amarillo, verde lima, celeste y rosa).
-- **Menú flotante contextual:** Al seleccionar cualquier fragmento de texto con el cursor, puedes:
-  - 🖍️ **Destacar** y guardar en tu lista lateral de apuntes.
-  - 🤖 **Preguntar al Tutor IA** para que te explique el fragmento inmediatamente.
-  - 🗂️ **Crear Flashcard** basada en ese extracto.
-  - 📝 **Crear Pregunta de Quiz** para evaluar tu retención.
-- **Panel lateral de apuntes:** Accede a todos los textos destacados del documento con salto directo a la página correspondiente con un clic.
-
-### 3. 🤖 Tutor IA (Conectado a Google Gemini Flash & Pro)
-- **Modelos compatibles:** Soporta tanto modelos ultrarrápidos como de máximo razonamiento:
-  - 👑 **Gemini 2.5 Pro:** Modelo insignia de razonamiento profundo para análisis conceptual exhaustivo y problemas complejos.
-  - 🧠 **Gemini 1.5 Pro:** Gran capacidad analítica con ventana de contexto de 2 millones de tokens.
-  - ⚡ **Gemini 2.5 Flash / 2.0 Flash / 1.5 Flash:** Respuestas ultra veloces para repaso ágil.
-  - *Todos los modelos funcionan con la misma clave gratuita de Google AI Studio.*
-- **Inyección de contexto:** Permite vincular la página actual del PDF o fragmentos de clases para que el tutor responda con base estricta en tu material de estudio.
-- **Chips de interacción pedagógica rápida:**
-  - *Método Feynman*: Explicaciones en lenguaje sencillo y analógico.
-  - *Casos clínicos y prácticos*: Aplicación directa de la teoría.
-  - *Preguntas socráticas*: Evaluación de comprensión.
-  - *Mnemotecnias y resúmenes de alto rendimiento*.
-- **Síntesis de voz (Text-to-Speech):** Escucha las respuestas del tutor mientras descansas la vista.
-
-### 4. 🗂️ Creador de Flashcards (Repetición Espaciada - SRS)
-- **Generador con IA:** Escribe cualquier tema o pega tus apuntes y Gemini creará automáticamente las tarjetas con anverso, reverso pedagógico y pistas mnemotécnicas.
-- **Creador manual:** Añade tarjetas personalizadas a tus propios mazos.
-- **Modo Estudio 3D:**
-  - Animación de volteo de tarjeta con un clic o presionando la tecla `Espacio`.
-  - Botones de autoevaluación SRS:
-    - 🔴 **Difícil** (Atajo: `1`) - Reinserta la tarjeta para repasarla pronto.
-    - 🟡 **Regular** (Atajo: `2`) - Mantiene en revisión.
-    - 🟢 **Dominada** (Atajo: `3`) - Marca como dominada.
-  - Barra de progreso, métricas de retención y celebración con confeti al finalizar.
-
-### 5. 📝 Creador de Preguntas de Selección Múltiple (Quiz)
-- **Generación automática con Gemini:** Crea exámenes simulados de 4 opciones (A, B, C, D) con enunciado riguroso y retroalimentación académica.
-- **Simulador de examen interactivo:**
-  - Selección de opciones con verificación instantánea (verde para correcta, rojo para error).
-  - Caja de retroalimentación detallada explicando por qué la opción es la acertada y el fallo de las distractoras.
-  - Pantalla final de métricas con porcentaje de acierto.
-  - **Función de oro:** Botón para *convertir automáticamente todas las preguntas falladas en Flashcards* de refuerzo.
+Arquitectura modular de alto rendimiento para Active Recall y Repetición Espaciada (Spaced Repetition) con generación inteligente asistida por **Google Gemini API** (Structured Outputs) y persistencia híbrida (IndexedDB local + Supabase DDL).
 
 ---
 
-## 💻 Cómo Iniciar la Aplicación
+## 🏗️ 1. Arquitectura del Sistema
 
-No requiere instalaciones complejas ni dependencias de Node.js o Python:
+```
+                     +---------------------------------------+
+                     |         FlojerApp PWA (Client)        |
+                     |   (Vanilla JS ES6 + Tailwind CSS JIT) |
+                     +-------------------+-------------------+
+                                         |
+            +----------------------------+----------------------------+
+            |                                                         |
+            v                                                         v
++-----------------------+                                 +-----------------------+
+|  Local Storage Engine |                                 |  Google Gemini API    |
+|   (IndexedDB W3C)     |                                 | (Structured Outputs)  |
+| - folders, cards      |                                 | - responseSchema      |
+| - reviews_log         |                                 | - gemini-2.5-pro/flash|
+| - user_metrics        |                                 +-----------------------+
++-----------+-----------+
+            | (Opcional)
+            v
++-----------------------+
+|  Supabase Cloud Sync  |
+| (PostgreSQL + RLS DDL)|
++-----------------------+
+```
 
-1. Haz doble clic en el archivo **`abrir_app.bat`** (o abre directamente **`index.html`** en tu navegador favorito como Google Chrome o Microsoft Edge).
-2. Para conectar el Tutor IA y los generadores automáticos, ve al botón de **⚙️ Configuración** arriba a la derecha e introduce tu **Google Gemini API Key** (puedes obtenerla gratis en [Google AI Studio](https://aistudio.google.com/app/apikey)).
-3. ¡Listo para estudiar!
+---
+
+## 📁 2. Estructura de Archivos del Proyecto
+
+```
+FlojerApp/
+├── index.html               # Shell principal de la PWA con Tailwind CSS
+├── manifest.json            # Web App Manifest (instalación en móvil/escritorio)
+├── sw.js                    # Service Worker con caché offline-first
+├── abrir_app.bat            # Lanzador para Windows de un clic
+├── supabase/
+│   └── schema.sql           # Esquema DDL SQL para PostgreSQL / Supabase
+├── css/
+│   └── app.css              # Animaciones, perspectiva 3D para flashcards y scrollbars
+├── js/
+│   ├── srs.js               # Implementación matemática del algoritmo SM-2
+│   ├── db.js                # Capa IndexedDB local + datos de semilla
+│   ├── gemini.js            # Cliente Gemini con Structured Outputs (JSON Schema)
+│   ├── quiz.js              # Motor de evaluación con justificación paso a paso
+│   ├── study.js             # Motor de Flashcard 3D y Active Recall
+│   ├── generator.js         # Interfaz para generación masiva de bancos de preguntas
+│   └── app.js               # Orquestador del Dashboard, métricas de racha y navegación
+└── README.md                # Documentación técnica completa
+```
+
+---
+
+## 🧠 3. Algoritmo de Repetición Espaciada (SM-2 Enhanced)
+
+El algoritmo se implementa en [`js/srs.js`](file:///c:/Users/cjtor/Desktop/FlojerApp/js/srs.js). Evalúa la retención en 4 niveles:
+
+| Calificación | Nombre | Efecto en Intervalo | Ajuste de Facilidad ($EF$) |
+| :--- | :--- | :--- | :--- |
+| **1** | 🔴 Otra vez (Again) | Reinicio a 1 día ($I=1$, $Rep=0$) | Disminución fuerte de $EF$ |
+| **2** | 🟡 Difícil (Hard) | Progresión moderada ($1.2 \times$) | Reducción de $EF$ |
+| **3** | 🔵 Bueno (Good) | Intervalo estándar SM-2 ($I \times EF$) | Mantiene o ajusta levemente |
+| **4** | 🟢 Fácil (Easy) | Salto amplio ($I \times EF \times 1.3$) | Incremento de $EF$ |
+
+### Fórmula de Actualización del Factor de Facilidad:
+$$EF' = EF + (0.1 - (5 - q) \times (0.08 + (5 - q) \times 0.02))$$
+*(Con límite inferior estricto $EF \ge 1.30$)*.
+
+---
+
+## 🤖 4. Gemini API con Structured Outputs (`responseSchema`)
+
+Para garantizar que el modelo nunca devuelva respuestas truncadas o markdown inválido que rompa la interfaz, la llamada a Gemini utiliza el parámetro nativo `responseSchema`:
+
+```javascript
+generationConfig: {
+  temperature: 0.35,
+  responseMimeType: "application/json",
+  responseSchema: {
+    type: "ARRAY",
+    items: {
+      type: "OBJECT",
+      properties: {
+        pregunta: { type: "STRING" },
+        tipo: { type: "STRING", enum: ["multiple_choice", "flashcard"] },
+        opciones: { type: "ARRAY", items: { type: "STRING" } },
+        respuesta_correcta: { type: "INTEGER" },
+        explicacion_detallada: { type: "STRING" },
+        etiquetas: { type: "ARRAY", items: { type: "STRING" } }
+      },
+      required: ["pregunta", "tipo", "opciones", "respuesta_correcta", "explicacion_detallada", "etiquetas"]
+    }
+  }
+}
+```
+
+---
+
+## 🚀 5. Ejecución & Despliegue
+
+1. **En Local:** Haz doble clic en `abrir_app.bat` o abre `index.html` en cualquier navegador moderno.
+2. **Online (GitHub Pages):** Publicado directamente en tu repositorio: [https://cblackmann.github.io/FlojerApp/](https://cblackmann.github.io/FlojerApp/)
+3. **Instalación como PWA:** En Chrome o Edge, haz clic en el ícono de instalación en la barra de direcciones para utilizarla como aplicación nativa de escritorio o móvil con soporte offline.

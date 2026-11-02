@@ -1,5 +1,5 @@
 @echo off
-title FlojerApp - Estudio Inteligente
-echo Iniciando FlojerApp en tu navegador...
+title FlojerApp PWA - Active Recall & Spaced Repetition
+echo Iniciando FlojerApp PWA en tu navegador...
 start "" "%~dp0index.html"
 exit
